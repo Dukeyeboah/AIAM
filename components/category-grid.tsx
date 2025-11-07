@@ -30,7 +30,7 @@ export interface Category {
   };
 }
 
-const categories: Category[] = [
+export const categories: Category[] = [
   {
     id: 'housing-home',
     title: 'Housing & Home',
@@ -142,9 +142,20 @@ const categories: Category[] = [
 ];
 
 export function CategoryGrid() {
-  const [selectedCategory, setSelectedCategory] = useState<Category | null>(
-    null
-  );
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const selectedCategory =
+    selectedIndex !== null ? categories[selectedIndex] : null;
+  const isModalOpen = selectedIndex !== null;
+
+  const handleNavigate = (direction: number) => {
+    if (selectedIndex === null) {
+      return;
+    }
+
+    const total = categories.length;
+    const nextIndex = (selectedIndex + direction + total) % total;
+    setSelectedIndex(nextIndex);
+  };
 
   return (
     <>
@@ -153,7 +164,7 @@ export function CategoryGrid() {
           <CategoryCard
             key={category.id}
             category={category}
-            onClick={() => setSelectedCategory(category)}
+            onClick={() => setSelectedIndex(index)}
             delay={index * 0.35}
             duration={6 + (index % 4) * 0.45}
           />
@@ -161,9 +172,16 @@ export function CategoryGrid() {
       </div>
 
       <AffirmationModal
+        categories={categories}
+        currentIndex={selectedIndex}
         category={selectedCategory}
-        open={!!selectedCategory}
-        onOpenChange={(open) => !open && setSelectedCategory(null)}
+        open={isModalOpen}
+        onNavigate={handleNavigate}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedIndex(null);
+          }
+        }}
       />
     </>
   );
