@@ -366,8 +366,8 @@ export function AffirmationModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='relative max-w-2xl max-h-[80vh] overflow-y-auto'>
-        {hasMultipleCategories && (
+      <DialogContent className='max-w-2xl max-h-[80vh] overflow-y-auto'>
+        {/* {hasMultipleCategories && (
           <>
             <Button
               variant='ghost'
@@ -388,30 +388,52 @@ export function AffirmationModal({
               <ChevronRight className='h-4 w-4' />
             </Button>
           </>
-        )}
+        )} */}
 
         <DialogHeader className='relative pb-2'>
-          <DialogTitle className='flex flex-col items-center gap-4 text-center text-2xl'>
+        {hasMultipleCategories && (
+          <>
+            <Button
+              variant='ghost'
+              size='icon'
+              className='absolute -left-1 top-1/2 translate-y-0  bg-transparent backdrop-blur hover:bg-white/80'
+              onClick={() => onNavigate(-1)}
+              aria-label='Previous category'
+            >
+              <ChevronLeft className='h-4 w-4' />
+            </Button>
+            <Button
+              variant='ghost'
+              size='icon'
+              className='absolute -right-1 top-1/2 translate-y-0  bg-transparent backdrop-blur hover:bg-white/80'
+              onClick={() => onNavigate(1)}
+              aria-label='Next category'
+            >
+              <ChevronRight className='h-4 w-4' />
+            </Button>
+          </>
+        )}
+          <DialogTitle className='flex flex-col items-center gap-2 text-center text-xl'>
             <div
               className={cn(
-                'w-12 h-12 rounded-xl flex items-center justify-center',
+                'w-8 h-8 rounded-xl flex items-center justify-center',
                 'overflow-hidden'
               )}
               style={{
                 backgroundImage: `linear-gradient(135deg, ${category.gradient.from}, ${category.gradient.to})`,
               }}
             >
-              <Icon className='w-6 h-6 text-slate-700' />
+              <Icon className='w-4 h4 text-slate-700' />
             </div>
             <span className='text-pretty'>{category.title}</span>
           </DialogTitle>
-          <div className='absolute right-0 top-1/2 -translate-y-1/2'>
+          <div className='absolute left-0 top-1 -translate-y-1/2'>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant='ghost'
                   size='icon'
-                  className='rounded-full bg-white/60 backdrop-blur hover:bg-white/80 shadow-sm'
+                  className='text-primary rounded-full bg-transparent backdrop-blur hover:bg-white/10 hover:text-gray-700'
                   disabled={isLoadingVoices || voices.length === 0}
                   aria-label='Select voice'
                 >
@@ -451,7 +473,7 @@ export function AffirmationModal({
                 <Loader2 className='w-8 h-8 animate-spin text-primary' />
               </div>
             ) : (
-              <blockquote className='text-xl md:text-2xl font-medium text-center text-balance leading-relaxed text-foreground px-4 py-8 bg-muted/30 rounded-2xl'>
+              <blockquote className='text-lg md:text-lg font-small text-center text-balance leading-relaxed text-foreground px-4 py-8 bg-muted/30 rounded-2xl'>
                 “{affirmation}”
               </blockquote>
             )}
