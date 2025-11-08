@@ -1,47 +1,55 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+
 import { CategoryGrid } from '@/components/category-grid';
 import { BackgroundAnimation } from '@/components/background-animation';
 import { SplashScreen } from '@/components/splash-screen';
+import { useAuth } from '@/providers/auth-provider';
+import { useAuthModal } from '@/providers/auth-modal-provider';
 
 export default function Home() {
+  const { user, profile, initializing } = useAuth();
+  const { open: openAuthModal } = useAuthModal();
+  const [splashComplete, setSplashComplete] = useState(false);
+
+  const showAuthCta = useMemo(
+    () => !initializing && !user,
+    [initializing, user]
+  );
+
+  useEffect(() => {
+    if (splashComplete && showAuthCta) {
+      openAuthModal();
+    }
+  }, [splashComplete, showAuthCta, openAuthModal]);
+
+  const firstName = useMemo(() => {
+    if (!profile?.displayName) return null;
+    return profile.displayName.trim().split(/\s+/)[0];
+  }, [profile?.displayName]);
+
   return (
-    <SplashScreen duration={5000}>
-      <main className='relative min-h-screen bg-gray-80 overflow-hidden'>
+    <SplashScreen
+      duration={5000}
+      showCta={showAuthCta}
+      onCtaClick={openAuthModal}
+      persistKey='aiam-splash-shown'
+      onComplete={() => setSplashComplete(true)}
+    >
+      <main className='relative min-h-screen overflow-hidden bg-gray-80'>
         <BackgroundAnimation />
 
-        <div className='relative z-10 container mx-auto px-1 py-4'>
-          <header className='bg-transparent backdrop-blur-sm pt-3 fixed top-0 left-6 right-6 z-250 text-center mb-12 space-y-4 flex flex-col items-centerjustify-center'>
-            <div className='flex flex-row items-centerjustify-center'>
-              {/* <img src='/images/aiam_logo_blk.png' alt='AiAm' className='h-4' /> */}
-              <img
-                src='/images/aiam_textlogo_blk.png'
-                alt='AiAm wordmark'
-                // className='w-24 animate-float'
-                className='h-6'
-              />
-            </div>
-            <div className='flex flex-col items-center justify-center'>
-              {/* <img
-                src='/images/aiam_textlogo_blk.png'
-                alt='AiAm wordmark'
-                // className='w-24 animate-float'
-                className='w-20'
-              /> */}
-            </div>
-            {/* <p className='text-lg md:text-lg text-muted-foreground max-w-2xl mx-auto text-blue-800 text-pretty'>
+        <div className='container relative z-10 mx-auto px-4 pb-10'>
+          <div className='flex flex-col items-center justify-center pb-10 text-center md:pt-0'>
+            {firstName && (
+              <p className='mt-0 text-sm text-muted-foreground'>
+                Welcome back, {firstName}!
+              </p>
+            )}
+            <p className='max-w-2xl text-lg text-gray-600'>
               Generate personalized affirmations to nurture your mind, body, and
-              soul
-            </p> */}
-          </header>
-          <div className='flex flex-col items-center justify-center pt-12 pb-8'>
-            {/* <img
-                src='/images/aiam_textlogo_blk.png'
-                alt='AiAm wordmark'
-                // className='w-24 animate-float'
-                className='w-20'
-              /> */}
-            <p className='text-lg md:text-lg text-muted-foreground max-w-2xl mx-auto text-blue-800 text-pretty'>
-              Generate personalized affirmations to nurture your mind, body, and
-              soul
+              soul.
             </p>
           </div>
 

@@ -4,6 +4,9 @@ import { Geist } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/next';
 import { Toaster } from '@/components/ui/toaster';
 import './globals.css';
+import { AuthProvider } from '@/providers/auth-provider';
+import { AuthModalProvider } from '@/providers/auth-modal-provider';
+import { AppShell } from '@/components/app-shell';
 
 const geist = Geist({ subsets: ['latin'] });
 
@@ -39,9 +42,13 @@ export default function RootLayout({
   return (
     <html lang='en'>
       <body className={`${geist.className} font-sans antialiased`}>
-        {children}
-        <Toaster />
-        <Analytics />
+        <AuthProvider>
+          <AuthModalProvider>
+            <AppShell>{children}</AppShell>
+            <Toaster />
+            <Analytics />
+          </AuthModalProvider>
+        </AuthProvider>
       </body>
     </html>
   );

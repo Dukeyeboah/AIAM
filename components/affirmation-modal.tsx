@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Volume2,
   Bookmark,
+  BookmarkCheck,
   ImageIcon,
   Loader2,
   ChevronLeft,
@@ -41,6 +42,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { useAuth } from '@/providers/auth-provider';
+import { firebaseDb } from '@/lib/firebase/client';
+import {
+  addDoc,
+  collection,
+  doc,
+  serverTimestamp,
+  updateDoc,
+} from 'firebase/firestore';
 
 interface VoiceOption {
   id: string;
@@ -76,15 +86,42 @@ export function AffirmationModal({
   const [pendingFeature, setPendingFeature] = useState<
     'image' | 'voice' | null
   >(null);
+  const [affirmationDocId, setAffirmationDocId] = useState<string | null>(null);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [isSavingFavorite, setIsSavingFavorite] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
+
+  const userAffirmationsCollection = useMemo(() => {
+    if (!user) return null;
+    return collection(firebaseDb, 'users', user.uid, 'affirmations');
+  }, [user]);
+
+  const resetAffirmationState = () => {
+    setAffirmation('');
+    setGeneratedImage(null);
+    setAffirmationDocId(null);
+    setIsFavorite(false);
+  };
 
   const generateAffirmation = async () => {
     if (!category) return;
+    if (!user) {
+      toast({
+        title: 'Sign in required',
+        description:
+          'You need an AiAm account to generate and save affirmations.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     setIsGenerating(true);
     setGeneratedImage(null);
+    setAffirmationDocId(null);
+    setIsFavorite(false);
 
     try {
       const response = await fetch('/api/generate-affirmation', {
@@ -105,6 +142,31 @@ export function AffirmationModal({
         throw new Error('Affirmation generation returned no result.');
       }
       setAffirmation(data.affirmation);
+
+      if (userAffirmationsCollection) {
+        try {
+          const docRef = await addDoc(userAffirmationsCollection, {
+            affirmation: data.affirmation,
+            categoryId: category.id,
+            categoryTitle: category.title,
+            imageUrl: null,
+            favorite: false,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          setAffirmationDocId(docRef.id);
+        } catch (saveError) {
+          console.error(
+            '[AffirmationModal] Failed to save affirmation:',
+            saveError
+          );
+          toast({
+            title: 'Saved locally only',
+            description:
+              'We generated your affirmation but could not store it yet.',
+          });
+        }
+      }
     } catch (error) {
       console.error('[AffirmationModal] Error generating affirmation:', error);
       toast({
@@ -122,6 +184,15 @@ export function AffirmationModal({
 
   const generateImage = async () => {
     if (!affirmation || !category) return;
+    if (!user) {
+      toast({
+        title: 'Sign in required',
+        description:
+          'Create an account or log in to generate images with your affirmations.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     setIsGeneratingImage(true);
     setGeneratedImage(null);
@@ -149,6 +220,28 @@ export function AffirmationModal({
 
       if (data.imageUrl) {
         setGeneratedImage(data.imageUrl);
+        if (user && affirmationDocId) {
+          try {
+            await updateDoc(
+              doc(
+                firebaseDb,
+                'users',
+                user.uid,
+                'affirmations',
+                affirmationDocId
+              ),
+              {
+                imageUrl: data.imageUrl,
+                updatedAt: serverTimestamp(),
+              }
+            );
+          } catch (updateError) {
+            console.error(
+              '[AffirmationModal] Failed to attach image to affirmation:',
+              updateError
+            );
+          }
+        }
         return;
       }
 
@@ -245,31 +338,60 @@ export function AffirmationModal({
     }
   };
 
-  const bookmarkAffirmation = () => {
-    if (!affirmation || !category) return;
+  const toggleFavorite = async () => {
+    if (!user) {
+      toast({
+        title: 'Sign in required',
+        description: 'Log in to save affirmations to your favorites.',
+      });
+      return;
+    }
 
-    const bookmarks = JSON.parse(localStorage.getItem('affirmations') || '[]');
-    const newBookmark = {
-      id: Date.now(),
-      category: category.title,
-      affirmation,
-      image: generatedImage,
-      createdAt: new Date().toISOString(),
-    };
+    if (!affirmationDocId) {
+      toast({
+        title: 'Affirmation not ready',
+        description:
+          'Generate an affirmation first before adding it to your favorites.',
+      });
+      return;
+    }
 
-    bookmarks.push(newBookmark);
-    localStorage.setItem('affirmations', JSON.stringify(bookmarks));
+    const nextFavorite = !isFavorite;
+    setIsSavingFavorite(true);
 
-    toast({
-      title: 'Bookmarked!',
-      description: 'Affirmation saved to your collection.',
-    });
+    try {
+      await updateDoc(
+        doc(firebaseDb, 'users', user.uid, 'affirmations', affirmationDocId),
+        {
+          favorite: nextFavorite,
+          updatedAt: serverTimestamp(),
+        }
+      );
+      setIsFavorite(nextFavorite);
+      toast({
+        title: nextFavorite ? 'Favorited!' : 'Removed from favorites',
+        description: nextFavorite
+          ? 'Affirmation saved to your favorites.'
+          : 'Affirmation removed from favorites.',
+      });
+    } catch (error) {
+      console.error('[AffirmationModal] Failed to toggle favorite:', error);
+      toast({
+        title: 'Unable to update favorite',
+        description:
+          'We could not update this affirmation right now. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingFavorite(false);
+    }
   };
 
   useEffect(() => {
     if (!open) {
       stopAudioPlayback();
       setGeneratedImage(null);
+      resetAffirmationState();
       return;
     }
 
@@ -529,13 +651,20 @@ export function AffirmationModal({
 
             <Button
               variant='outline'
-              onClick={bookmarkAffirmation}
-              disabled={isGenerating || !affirmation}
-              // className='gap-2 bg-transparent'
-              className='gap-2 bg-transparent w-10 bg-red-200/60 hover:bg-red-300/60 hover:cursor-pointer'
+              onClick={toggleFavorite}
+              disabled={isGenerating || !affirmation || isSavingFavorite}
+              className={cn(
+                'gap-2 bg-transparent w-10 hover:cursor-pointer',
+                isFavorite
+                  ? 'bg-red-300/70 hover:bg-red-400/80'
+                  : 'bg-red-200/60 hover:bg-red-300/60'
+              )}
             >
-              <Bookmark className='w-4 h-4' />
-              {/* Bookmark */}
+              {isFavorite ? (
+                <BookmarkCheck className='w-4 h-4' />
+              ) : (
+                <Bookmark className='w-4 h-4' />
+              )}
             </Button>
           </div>
 

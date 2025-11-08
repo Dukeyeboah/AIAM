@@ -2,7 +2,7 @@
 
 import type React from 'react';
 
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { CategoryCard } from './category-card';
 import { AffirmationModal } from './affirmation-modal';
 import {
@@ -19,6 +19,9 @@ import {
   Shield,
   Smile,
 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/providers/auth-provider';
+import { useAuthModal } from '@/providers/auth-modal-provider';
 
 export interface Category {
   id: string;
@@ -146,6 +149,28 @@ export function CategoryGrid() {
   const selectedCategory =
     selectedIndex !== null ? categories[selectedIndex] : null;
   const isModalOpen = selectedIndex !== null;
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const { open: openAuthModal } = useAuthModal();
+
+  const isAuthenticated = useMemo(() => Boolean(user), [user]);
+
+  const handleSelect = useCallback(
+    (index: number) => {
+      if (!isAuthenticated) {
+        toast({
+          title: 'Create your free AiAm account',
+          description:
+            'Sign up or log in to unlock affirmations and get 100 starter credits.',
+        });
+        openAuthModal();
+        return;
+      }
+
+      setSelectedIndex(index);
+    },
+    [isAuthenticated, openAuthModal, toast]
+  );
 
   const handleNavigate = (direction: number) => {
     if (selectedIndex === null) {
@@ -164,7 +189,7 @@ export function CategoryGrid() {
           <CategoryCard
             key={category.id}
             category={category}
-            onClick={() => setSelectedIndex(index)}
+            onClick={() => handleSelect(index)}
             delay={index * 0.35}
             duration={6 + (index % 4) * 0.45}
           />
