@@ -70,7 +70,8 @@ export function BackgroundAnimation() {
 
         // Draw particle with gradient
         const gradient = ctx.createRadialGradient(particle.x, particle.y, 0, particle.x, particle.y, particle.size * 2)
-        gradient.addColorStop(0, `rgba(100, 180, 180, ${particle.opacity})`)
+        // gradient.addColorStop(0, `rgba(100, 180, 180, ${particle.opacity})`)
+        gradient.addColorStop(0, `rgba(100, 180, 180, 1)`)
         gradient.addColorStop(1, `rgba(100, 180, 180, 0)`)
 
         ctx.fillStyle = gradient

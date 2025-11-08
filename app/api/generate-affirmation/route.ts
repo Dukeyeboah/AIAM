@@ -24,6 +24,20 @@ export async function POST(request: Request) {
     }
 
     const openai = getClient();
+    const shouldStartWithIAm = Math.random() < 0.69;
+
+    const requirements = [
+      `Create one powerful affirmation for the category "${category}".`,
+      'Requirements:',
+      shouldStartWithIAm
+        ? '• Begin the sentence with the exact words "I am".'
+        : '• Use a natural first-person opening such as "I", "I am", "I choose", or "My".',
+      '• Present tense and realistic yet aspirational.',
+      '• 20-32 words.',
+      '• Include a specific detail, sensation, or emotion tied to the category.',
+      '• Avoid repeating phrases like "I am worthy" or generic clichés.',
+      '• Return only the affirmation text with no quotation marks.',
+    ].join('\n');
 
     const completion = await openai.chat.completions.create({
       model,
@@ -37,23 +51,21 @@ export async function POST(request: Request) {
         },
         {
           role: 'user',
-          content: [
-            `Create one powerful affirmation for the category "${category}".`,
-            'Requirements:',
-            '• First-person voice beginning with "I" or "My".',
-            '• Present tense and realistic yet aspirational.',
-            '• 20-32 words.',
-            '• Include a specific detail, sensation, or emotion tied to the category.',
-            '• Avoid repeating phrases like "I am worthy" or generic clichés.',
-          ].join('\n'),
+          content: requirements,
         },
       ],
     });
 
-    const affirmation = completion.choices?.[0]?.message?.content?.trim();
+    let affirmation = completion.choices?.[0]?.message?.content ?? '';
+    affirmation = affirmation.replace(/^["“”']+|["“”']+$/g, '').trim();
 
     if (!affirmation) {
       throw new Error('Affirmation generation returned no content.');
+    }
+
+    if (shouldStartWithIAm && !affirmation.toLowerCase().startsWith('i am')) {
+      const trimmed = affirmation.replace(/^i\b/i, '').trimStart();
+      affirmation = `I am ${trimmed}`.replace(/\s{2,}/g, ' ').trim();
     }
 
     return NextResponse.json({ affirmation });

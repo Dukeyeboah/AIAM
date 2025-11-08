@@ -17,8 +17,9 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
-  Headphones,
+  Mic,
   Check,
+  Square,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -28,6 +29,18 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface VoiceOption {
   id: string;
@@ -57,10 +70,12 @@ export function AffirmationModal({
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
-  const [imagePrompt, setImagePrompt] = useState<string | null>(null);
   const [voices, setVoices] = useState<VoiceOption[]>([]);
   const [selectedVoice, setSelectedVoice] = useState<string>('');
   const [isLoadingVoices, setIsLoadingVoices] = useState(false);
+  const [pendingFeature, setPendingFeature] = useState<
+    'image' | 'voice' | null
+  >(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
   const { toast } = useToast();
@@ -70,7 +85,6 @@ export function AffirmationModal({
 
     setIsGenerating(true);
     setGeneratedImage(null);
-    setImagePrompt(null);
 
     try {
       const response = await fetch('/api/generate-affirmation', {
@@ -106,47 +120,14 @@ export function AffirmationModal({
     }
   };
 
-  const pollPrediction = async (predictionId: string) => {
-    const maxAttempts = 30;
-
-    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      await new Promise((resolve) =>
-        setTimeout(resolve, attempt === 0 ? 1000 : 1500)
-      );
-
-      const statusResponse = await fetch(`/api/generate-image/${predictionId}`);
-      if (!statusResponse.ok) {
-        throw new Error('Unable to monitor image generation status.');
-      }
-
-      const statusData = await statusResponse.json();
-
-      if (statusData.status === 'succeeded') {
-        if (Array.isArray(statusData.output) && statusData.output.length > 0) {
-          return statusData.output[0] as string;
-        }
-        throw new Error('Image generation completed without output.');
-      }
-
-      if (statusData.status === 'failed' || statusData.status === 'canceled') {
-        throw new Error(
-          statusData.detail ?? 'Image generation failed. Please try again.'
-        );
-      }
-    }
-
-    throw new Error('Image generation timed out. Try again in a moment.');
-  };
-
   const generateImage = async () => {
     if (!affirmation || !category) return;
 
     setIsGeneratingImage(true);
     setGeneratedImage(null);
-    setImagePrompt(null);
 
     try {
-      const response = await fetch('/api/generate-image', {
+      const response = await fetch('/api/predictions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -156,23 +137,18 @@ export function AffirmationModal({
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Unable to start image generation.');
-      }
-
       const data = await response.json();
-      if (data.prompt) {
-        setImagePrompt(data.prompt);
+      if (!response.ok) {
+        const detail =
+          data?.error ??
+          data?.detail ??
+          (typeof data === 'string' ? data : null) ??
+          'Unable to start image generation.';
+        throw new Error(detail);
       }
 
       if (data.imageUrl) {
         setGeneratedImage(data.imageUrl);
-        return;
-      }
-
-      if (data.predictionId) {
-        const imageUrl = await pollPrediction(data.predictionId as string);
-        setGeneratedImage(imageUrl);
         return;
       }
 
@@ -363,6 +339,25 @@ export function AffirmationModal({
 
   const Icon = category.icon;
   const hasMultipleCategories = categories.length > 1;
+  const featureDescriptions: Record<
+    'image' | 'voice',
+    { title: string; description: string }
+  > = {
+    image: {
+      title: 'Bring your own image',
+      description:
+        'To generate affirmations with your personal imagery, you’ll need an account and at least one uploaded photo.',
+    },
+    voice: {
+      title: 'Use your own voice',
+      description:
+        'Upload a short voice sample after creating an account to hear affirmations read in your voice.',
+    },
+  };
+
+  const handleUnavailableFeature = (feature: 'image' | 'voice') => {
+    setPendingFeature(feature);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -391,28 +386,28 @@ export function AffirmationModal({
         )} */}
 
         <DialogHeader className='relative pb-2'>
-        {hasMultipleCategories && (
-          <>
-            <Button
-              variant='ghost'
-              size='icon'
-              className='absolute -left-1 top-1/2 translate-y-0  bg-transparent backdrop-blur hover:bg-white/80'
-              onClick={() => onNavigate(-1)}
-              aria-label='Previous category'
-            >
-              <ChevronLeft className='h-4 w-4' />
-            </Button>
-            <Button
-              variant='ghost'
-              size='icon'
-              className='absolute -right-1 top-1/2 translate-y-0  bg-transparent backdrop-blur hover:bg-white/80'
-              onClick={() => onNavigate(1)}
-              aria-label='Next category'
-            >
-              <ChevronRight className='h-4 w-4' />
-            </Button>
-          </>
-        )}
+          {hasMultipleCategories && (
+            <>
+              <Button
+                variant='ghost'
+                size='icon'
+                className='absolute -left-1 top-1/2 translate-y-0  bg-transparent backdrop-blur hover:bg-primary/40'
+                onClick={() => onNavigate(-1)}
+                aria-label='Previous category'
+              >
+                <ChevronLeft className='h-4 w-4' />
+              </Button>
+              <Button
+                variant='ghost'
+                size='icon'
+                className='absolute -right-1 top-1/2 translate-y-0  bg-transparent backdrop-blur hover:bg-primary/40'
+                onClick={() => onNavigate(1)}
+                aria-label='Next category'
+              >
+                <ChevronRight className='h-4 w-4 hover:text-secondary' />
+              </Button>
+            </>
+          )}
           <DialogTitle className='flex flex-col items-center gap-2 text-center text-xl'>
             <div
               className={cn(
@@ -433,11 +428,12 @@ export function AffirmationModal({
                 <Button
                   variant='ghost'
                   size='icon'
-                  className='text-primary rounded-full bg-transparent backdrop-blur hover:bg-white/10 hover:text-gray-700'
+                  className='text-primary rounded-full bg-transparent backdrop-blur hover:bg-white/10 hover:text-gray-700 cursor-pointer'
                   disabled={isLoadingVoices || voices.length === 0}
                   aria-label='Select voice'
                 >
-                  <Headphones className='h-4 w-4' />
+                  {/* <Headphones className='h-4 w-4' /> */}
+                  <Mic className='h-4 w-4' />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align='end' className='w-52'>
@@ -473,17 +469,11 @@ export function AffirmationModal({
                 <Loader2 className='w-8 h-8 animate-spin text-primary' />
               </div>
             ) : (
-              <blockquote className='text-lg md:text-lg font-small text-center text-balance leading-relaxed text-foreground px-4 py-8 bg-muted/30 rounded-2xl'>
+              <blockquote className='text-md md:text-md font-small text-center text-balance leading-relaxed text-foreground px-4 py-8 bg-muted/30 rounded-2xl'>
                 “{affirmation}”
               </blockquote>
             )}
           </div>
-
-          {imagePrompt && (
-            <p className='text-sm text-muted-foreground text-center'>
-              Image prompt: {imagePrompt}
-            </p>
-          )}
 
           {generatedImage && (
             <div className='rounded-2xl overflow-hidden border border-border/40'>
@@ -495,54 +485,132 @@ export function AffirmationModal({
             </div>
           )}
 
-          <div className='grid grid-cols-2 gap-3'>
+          {/* <div className='grid grid-cols-4 gap-1 flex justify-center items-center'> */}
+          <div className='flex justify-center items-center gap-6'>
             <Button
               variant='outline'
               onClick={generateAffirmation}
               disabled={isGenerating}
-              className='gap-2 bg-transparent'
+              // className='gap-2 bg-transparent'
+              className='gap-2 bg-transparent w-10 bg-primary/20 hover:bg-primary/80 hover:cursor-pointer'
             >
               <RefreshCw
                 className={cn('w-4 h-4', isGenerating && 'animate-spin')}
               />
-              Regenerate
+              {/* Regenerate */}
             </Button>
 
             <Button
               variant='outline'
               onClick={speakAffirmation}
               disabled={isGenerating || !affirmation}
-              className='gap-2 bg-transparent'
+              // className='gap-2 bg-transparent'
+              className='gap-2 bg-transparent w-10 bg-blue-200/60 hover:bg-blue-400 hover:cursor-pointer'
             >
-              <Volume2
-                className={cn('w-4 h-4', isSpeaking && 'animate-pulse')}
-              />
-              {isSpeaking ? 'Stop' : 'Play'}
+              {isSpeaking ? (
+                <Square className='h-4 w-4' />
+              ) : (
+                <Volume2 className='h-4 w-4' />
+              )}
             </Button>
 
             <Button
               variant='outline'
               onClick={generateImage}
               disabled={isGenerating || isGeneratingImage || !affirmation}
-              className='gap-2 bg-transparent'
+              // className='gap-2 bg-transparent'
+              className='gap-2 bg-transparent w-10 bg-yellow-200/60 hover:bg-yellow-300/60 hover:cursor-pointer'
             >
               <ImageIcon
-                className={cn('w-4 h-4', isGeneratingImage && 'animate-pulse')}
+                className={cn('w-4 h-4', isGeneratingImage && 'animate-spin')}
               />
-              {isGeneratingImage ? 'Generating...' : 'Generate Image'}
+              {/* {isGeneratingImage ? 'Generating...' : 'Generate Image'} */}
             </Button>
 
             <Button
               variant='outline'
               onClick={bookmarkAffirmation}
               disabled={isGenerating || !affirmation}
-              className='gap-2 bg-transparent'
+              // className='gap-2 bg-transparent'
+              className='gap-2 bg-transparent w-10 bg-red-200/60 hover:bg-red-300/60 hover:cursor-pointer'
             >
               <Bookmark className='w-4 h-4' />
-              Bookmark
+              {/* Bookmark */}
             </Button>
           </div>
+
+          <div className='mt-4 rounded-2xl border border-border/40 bg-muted/10 p-4'>
+            {/* <div className='mt-4 rounded-2xl border border-border/40 bg-muted/10 p-4 shadow-sm'></div> */}
+            <p className='mb-3 text-sm font-medium text-muted-foreground text-center'>
+              Personalize your experience
+            </p>
+            <div className='space-y-3'>
+              <div className='flex items-center justify-between gap-4'>
+                <Label
+                  htmlFor='toggle-my-image'
+                  className='text-sm font-medium text-foreground'
+                >
+                  In my image
+                </Label>
+                <Switch
+                  id='toggle-my-image'
+                  checked={false}
+                  onCheckedChange={() => handleUnavailableFeature('image')}
+                />
+              </div>
+              <div className='flex items-center justify-between gap-4'>
+                <Label
+                  htmlFor='toggle-my-voice'
+                  className='text-sm font-medium text-foreground'
+                >
+                  In my voice
+                </Label>
+                <Switch
+                  id='toggle-my-voice'
+                  checked={false}
+                  onCheckedChange={() => handleUnavailableFeature('voice')}
+                />
+              </div>
+            </div>
+          </div>
         </div>
+
+        <AlertDialog
+          open={pendingFeature !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setPendingFeature(null);
+            }
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {pendingFeature
+                  ? featureDescriptions[pendingFeature].title
+                  : ''}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {pendingFeature
+                  ? featureDescriptions[pendingFeature].description
+                  : ''}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setPendingFeature(null)}>
+                Not now
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  // Placeholder: hook into auth flow later
+                  setPendingFeature(null);
+                }}
+              >
+                Sign up / Log in
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );

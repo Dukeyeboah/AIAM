@@ -7,6 +7,8 @@ const promptModel =
   process.env.OPENAI_AFFIRMATION_MODEL ??
   'gpt-4o-mini';
 
+type ModelSpecifier = `${string}/${string}` | `${string}/${string}:${string}`;
+
 const getOpenAI = () => {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -33,14 +35,6 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: 'Affirmation text is required.' },
         { status: 400 }
-      );
-    }
-
-    const replicateVersion = process.env.REPLICATE_NANO_BANANA_VERSION;
-    if (!replicateVersion) {
-      return NextResponse.json(
-        { error: 'Replicate Nano-Banana version is not configured.' },
-        { status: 500 }
       );
     }
 
@@ -76,25 +70,79 @@ export async function POST(request: Request) {
     }
 
     const replicate = getReplicate();
-    const prediction = await replicate.predictions.create({
-      version: replicateVersion,
+    const baseModel =
+      process.env.REPLICATE_NANO_BANANA_MODEL ?? 'google/nano-banana';
+    const configuredVersion = process.env.REPLICATE_NANO_BANANA_VERSION;
+
+    const resolveModelSpecifier = async (): Promise<ModelSpecifier> => {
+      const ensureWithLatestVersion = async (
+        modelName: string
+      ): Promise<ModelSpecifier> => {
+        const [owner, name] = modelName.split('/');
+        if (!owner || !name) {
+          throw new Error(
+            `Model identifier "${modelName}" must be in the format "owner/name".`
+          );
+        }
+
+        const modelInfo = await replicate.models.get(owner, name);
+        const latestId = modelInfo?.latest_version?.id;
+        if (!latestId) {
+          throw new Error(
+            `Unable to resolve a version for the model "${owner}/${name}".`
+          );
+        }
+        return `${owner}/${name}:${latestId}` as ModelSpecifier;
+      };
+
+      if (!configuredVersion) {
+        return await ensureWithLatestVersion(baseModel);
+      }
+
+      if (configuredVersion.includes(':')) {
+        const [modelPart] = configuredVersion.split(':');
+        if (!modelPart || !modelPart.includes('/')) {
+          throw new Error(
+            `Configured model "${configuredVersion}" must include an owner and name.`
+          );
+        }
+        return configuredVersion as ModelSpecifier;
+      }
+
+      if (configuredVersion.includes('/')) {
+        if (configuredVersion.includes(':')) {
+          return configuredVersion as ModelSpecifier;
+        }
+        return await ensureWithLatestVersion(configuredVersion);
+      }
+
+      return `${baseModel}:${configuredVersion}` as ModelSpecifier;
+    };
+
+    const modelSpecifier = await resolveModelSpecifier();
+
+    const output = await replicate.run(modelSpecifier, {
       input: {
         prompt: imagePrompt,
-        negative_prompt:
-          'text, words, watermark, signature, low quality, distorted, disfigured, extra limbs',
-        num_inference_steps: 12,
-        guidance_scale: 3.5,
+        output_format: 'jpg',
       },
     });
 
+    const imageUrl =
+      typeof output === 'string'
+        ? output
+        : Array.isArray(output) && output.length > 0
+        ? String(output[0])
+        : typeof output === 'object' && output !== null && 'url' in output
+        ? String((output as { url?: string }).url)
+        : null;
+
+    if (!imageUrl) {
+      throw new Error('Image generation returned no output.');
+    }
+
     return NextResponse.json({
-      predictionId: prediction.id,
-      status: prediction.status,
-      prompt: imagePrompt,
-      imageUrl:
-        Array.isArray(prediction.output) && prediction.output.length > 0
-          ? prediction.output[0]
-          : null,
+      imageUrl,
     });
   } catch (error) {
     console.error('[api/generate-image] Error:', error);
