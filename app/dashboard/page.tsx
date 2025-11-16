@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { PlusCircle, FolderPlus, Play } from 'lucide-react';
 
 import {
@@ -29,6 +30,7 @@ import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 
 export default function DashboardPage() {
   const { user, profile } = useAuth();
+  const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState<string | 'all'>(
     'all'
   );
@@ -37,13 +39,6 @@ export default function DashboardPage() {
   });
   const { toast } = useToast();
   const [isPlayingAll, setIsPlayingAll] = useState(false);
-
-  const playlistsComingSoon = () =>
-    toast({
-      title: 'Playlists coming soon',
-      description:
-        'We’re building custom affirmation playlists so you can curate sets for any moment.',
-    });
 
   const greeting = useMemo(() => {
     if (!profile?.displayName) return 'Your dashboard';
@@ -194,11 +189,11 @@ export default function DashboardPage() {
           </Button>
           <Button
             variant='secondary'
-            onClick={playlistsComingSoon}
-            className='flex items-center gap-2'
+            onClick={() => router.push('/playlists')}
+            className='flex items-center gap-2 cursor-pointer'
           >
             <FolderPlus className='h-4 w-4' />
-            Create playlist
+            Playlists
           </Button>
           <Button onClick={() => setSelectedCategory('all')} variant='outline'>
             Clear filters

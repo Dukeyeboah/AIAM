@@ -11,8 +11,10 @@ import {
   ChevronDown,
   Mic,
   Check,
+  MoreVertical,
+  Trash2,
 } from 'lucide-react';
-import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { doc, serverTimestamp, updateDoc, deleteDoc } from 'firebase/firestore';
 
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -24,7 +26,12 @@ import type { UserAffirmation } from '@/hooks/use-user-affirmations';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Bookmark, BookmarkCheck } from 'lucide-react';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import {
+  getDownloadURL,
+  ref,
+  uploadBytes,
+  deleteObject,
+} from 'firebase/storage';
 import { AffirmationImageDialog } from '@/components/affirmation-image-dialog';
 import { cn } from '@/lib/utils';
 import {
@@ -32,6 +39,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import {
   Collapsible,
@@ -42,6 +50,8 @@ import { categories } from '@/components/category-grid';
 import {
   calculateCreditCost,
   hasEnoughCredits,
+  isLowOnCredits,
+  getRemainingAffirmations,
   PERSONAL_IMAGE_COST,
   VOICE_CLONE_COST,
 } from '@/lib/credit-utils';
@@ -69,7 +79,7 @@ export function UserAffirmationCard({
   affirmation,
   showFavoriteBadge = true,
 }: UserAffirmationCardProps) {
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
   const [generating, setGenerating] = useState(false);
@@ -92,6 +102,7 @@ export function UserAffirmationCard({
   const [personalizeOpen, setPersonalizeOpen] = useState(false);
   const [resolvedImageUrl, setResolvedImageUrl] = useState<string | null>(null);
   const personalImageOptOutRef = useRef(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const favoriteDocRef = useRef<ReturnType<typeof doc> | null>(null);
 
@@ -379,6 +390,7 @@ export function UserAffirmationCard({
 
     const cachedUrl = audioUrls[voiceToUse];
     if (cachedUrl) {
+      // Cached audio - no credit check needed, play directly
       try {
         stopAudio();
         setIsSpeaking(true);
@@ -405,6 +417,44 @@ export function UserAffirmationCard({
         stopAudio();
         return;
       }
+    }
+
+    // Not cached - need to generate audio, check credits first
+    if (!profile) {
+      toast({
+        title: 'Sign in required',
+        description: 'Log in to play affirmations.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Check credits for voice clone playback
+    const voiceCost = useMyVoice && hasPersonalVoice ? VOICE_CLONE_COST : 0;
+
+    if (
+      voiceCost > 0 &&
+      !hasEnoughCredits(profile.credits, { useVoiceClone: true })
+    ) {
+      toast({
+        title: 'Insufficient aiams',
+        description: `Voice clone playback requires ${VOICE_CLONE_COST} additional aiams. You currently have ${profile.credits} aiams.`,
+        variant: 'destructive',
+      });
+      router.push('/account?purchase=credits');
+      return;
+    }
+
+    if (
+      voiceCost > 0 &&
+      isLowOnCredits(profile.credits) &&
+      getRemainingAffirmations(profile.credits) === 1
+    ) {
+      toast({
+        title: 'Running low on aiams',
+        description: `You have ${profile.credits} aiams remaining. Consider purchasing more to continue your journey.`,
+        variant: 'default',
+      });
     }
 
     try {
@@ -436,7 +486,19 @@ export function UserAffirmationCard({
       setIsSpeaking(true);
       await audioRef.current.play();
 
-      void cacheAudioForVoice(voiceToUse, audioBlob);
+      // Cache the audio
+      const cachedAudioUrl = await cacheAudioForVoice(voiceToUse, audioBlob);
+
+      // Deduct credits if using voice clone
+      if (voiceCost > 0 && profile && user) {
+        const newCredits = profile.credits - voiceCost;
+        const userDocRef = doc(firebaseDb, 'users', user.uid);
+        await updateDoc(userDocRef, {
+          credits: newCredits,
+          updatedAt: serverTimestamp(),
+        });
+        await refreshProfile();
+      }
     } catch (error) {
       console.error('[affirmation-card] Failed to speak affirmation', error);
       toast({
@@ -454,7 +516,7 @@ export function UserAffirmationCard({
   const handleGenerateImage = async () => {
     if (generating) return;
 
-    if (!user) {
+    if (!user || !profile) {
       toast({
         title: 'Sign in required',
         description: 'Log in to generate imagery for your affirmations.',
@@ -472,6 +534,36 @@ export function UserAffirmationCard({
       router.push('/account?setup=images');
       setUseMyImage(false);
       return;
+    }
+
+    // Check credits for image generation
+    // If using personal image, need PERSONAL_IMAGE_COST (10 aiams)
+    // Otherwise, image generation is free (already paid for in base cost)
+    const imageCost = useMyImage && hasPersonalImages ? PERSONAL_IMAGE_COST : 0;
+
+    if (
+      imageCost > 0 &&
+      !hasEnoughCredits(profile.credits, { usePersonalImage: true })
+    ) {
+      toast({
+        title: 'Insufficient aiams',
+        description: `Personal image generation requires ${PERSONAL_IMAGE_COST} additional aiams. You currently have ${profile.credits} aiams.`,
+        variant: 'destructive',
+      });
+      router.push('/account?purchase=credits');
+      return;
+    }
+
+    if (
+      imageCost > 0 &&
+      isLowOnCredits(profile.credits) &&
+      getRemainingAffirmations(profile.credits) === 1
+    ) {
+      toast({
+        title: 'Running low on aiams',
+        description: `You have ${profile.credits} aiams remaining. Consider purchasing more to continue your journey.`,
+        variant: 'default',
+      });
     }
 
     setGenerating(true);
@@ -493,11 +585,7 @@ export function UserAffirmationCard({
               : undefined,
           aspectRatio: profile?.defaultAspectRatio ?? '1:1',
           demographics:
-            !useMyImage || !hasPersonalImages
-              ? profile?.tier === 'starter'
-                ? undefined
-                : demographicContext
-              : undefined,
+            !useMyImage || !hasPersonalImages ? demographicContext : undefined,
         }),
       });
 
@@ -514,6 +602,26 @@ export function UserAffirmationCard({
       if (data.imageUrl) {
         const storedUrl = await persistImageFromUrl(data.imageUrl);
         setResolvedImageUrl(storedUrl);
+
+        // Update image URL in Firestore
+        if (favoriteDocRef.current) {
+          await updateDoc(favoriteDocRef.current, {
+            imageUrl: storedUrl,
+            updatedAt: serverTimestamp(),
+          });
+        }
+
+        // Deduct credits if using personal image
+        if (imageCost > 0 && profile) {
+          const newCredits = profile.credits - imageCost;
+          const userDocRef = doc(firebaseDb, 'users', user.uid);
+          await updateDoc(userDocRef, {
+            credits: newCredits,
+            updatedAt: serverTimestamp(),
+          });
+          await refreshProfile();
+        }
+
         toast({
           title: 'Image generated',
           description:
@@ -651,13 +759,122 @@ export function UserAffirmationCard({
     setUseMyVoice(false);
   };
 
+  const handleDelete = async () => {
+    if (!favoriteDocRef.current || !user) {
+      toast({
+        title: 'Cannot delete',
+        description: 'You must be signed in to delete affirmations.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (
+      !confirm(
+        'Are you sure you want to delete this affirmation? This action cannot be undone.'
+      )
+    ) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      // Delete image from Storage if it exists
+      if (affirmation.imageUrl) {
+        try {
+          // Check if it's a Firebase Storage URL
+          if (affirmation.imageUrl.startsWith('gs://')) {
+            const path = affirmation.imageUrl.replace(/^gs:\/\/[^/]+\//, '');
+            const imageRef = ref(firebaseStorage, path);
+            await deleteObject(imageRef);
+          } else if (
+            affirmation.imageUrl.includes('firebasestorage.googleapis.com')
+          ) {
+            // Extract path from Firebase Storage URL
+            const urlParts = affirmation.imageUrl.split('/o/');
+            if (urlParts.length > 1) {
+              const pathPart = urlParts[1].split('?')[0];
+              const decodedPath = decodeURIComponent(pathPart);
+              const imageRef = ref(firebaseStorage, decodedPath);
+              await deleteObject(imageRef);
+            }
+          }
+        } catch (imageError) {
+          console.warn(
+            '[affirmation-card] Failed to delete image from storage',
+            imageError
+          );
+          // Continue with document deletion even if image deletion fails
+        }
+      }
+
+      // Delete audio files from Storage if they exist
+      if (
+        affirmation.audioUrls &&
+        Object.keys(affirmation.audioUrls).length > 0
+      ) {
+        try {
+          const deletePromises = Object.keys(affirmation.audioUrls).map(
+            async (voiceId) => {
+              const audioPath = `users/${user.uid}/affirmations/${affirmation.id}/audio/${voiceId}.mp3`;
+              const audioRef = ref(firebaseStorage, audioPath);
+              try {
+                await deleteObject(audioRef);
+              } catch (err) {
+                console.warn(
+                  `[affirmation-card] Failed to delete audio ${voiceId}`,
+                  err
+                );
+              }
+            }
+          );
+          await Promise.allSettled(deletePromises);
+        } catch (audioError) {
+          console.warn(
+            '[affirmation-card] Failed to delete audio files',
+            audioError
+          );
+          // Continue with document deletion
+        }
+      }
+
+      // Delete the Firestore document
+      await deleteDoc(favoriteDocRef.current);
+
+      toast({
+        title: 'Affirmation deleted',
+        description:
+          'The affirmation and its associated files have been removed.',
+      });
+    } catch (error) {
+      console.error('[affirmation-card] Failed to delete affirmation', error);
+      toast({
+        title: 'Delete failed',
+        description:
+          error instanceof Error
+            ? error.message
+            : 'Unable to delete the affirmation. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <>
       <Card className=' p-0 flex h-120 flex-col overflow-y-auto transition-shadow hover:shadow-lg'>
         {resolvedImageUrl ? (
-          <button
-            type='button'
+          <div
+            role='button'
+            tabIndex={0}
             onClick={() => setImageDialogOpen(true)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setImageDialogOpen(true);
+              }
+            }}
             className='relative h-72 w-full overflow-hidden'
           >
             <Image
@@ -668,26 +885,57 @@ export function UserAffirmationCard({
               sizes='(min-width: 768px) 50vw, 100vw'
               className='object-cover transition-transform duration-300 hover:scale-105 cursor-pointer'
             />
-            <div className='pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-4'>
-              <Badge
-                variant='default'
-                style={badgeStyle}
-                className='border border-transparent px-3 py-0.5 text-xs font-medium shadow'
-              >
-                {affirmation.categoryTitle}
-              </Badge>
-              {showFavoriteBadge && isFavorite && (
-                <Badge className='bg-red-400/70 text-white border-transparent'>
-                  Favorite
+            <div className='absolute inset-x-0 top-0 flex items-start justify-between p-4'>
+              <div className='pointer-events-none flex items-start gap-2'>
+                <Badge
+                  variant='default'
+                  style={badgeStyle}
+                  className='border border-transparent px-3 py-0.5 text-xs font-medium shadow'
+                >
+                  {affirmation.categoryTitle}
                 </Badge>
-              )}
+                {showFavoriteBadge && isFavorite && (
+                  <Badge className='bg-red-400/70 text-white border-transparent'>
+                    Favorite
+                  </Badge>
+                )}
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant='ghost'
+                    size='icon'
+                    className='h-8 w-8 bg-black/40 hover:bg-black/60 text-white backdrop-blur-sm'
+                    onClick={(e) => e.stopPropagation()}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? (
+                      <Loader2 className='h-4 w-4 animate-spin' />
+                    ) : (
+                      <MoreVertical className='h-4 w-4' />
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align='end'>
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleDelete();
+                    }}
+                    className='text-destructive focus:text-destructive'
+                  >
+                    <Trash2 className='mr-2 h-4 w-4' />
+                    Delete affirmation
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             <div className='pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-6'>
               <p className='text-base font-semibold leading-relaxed text-white text-center text-md'>
                 {affirmation.affirmation}
               </p>
             </div>
-          </button>
+          </div>
         ) : (
           <CardHeader className='space-y-4 bg-muted/20 p-6'>
             <div className='flex items-center justify-between'>

@@ -181,14 +181,20 @@ export function AffirmationModal({
     }
 
     // Calculate credit cost including image (base cost includes image)
+    // If auto-generate is ON and user has personal images, include personal image cost
+    // because auto-generate will use personal images if available
+    const willUsePersonalImage = autoGenerateImages
+      ? hasPersonalImages && !personalImageManuallyDisabledRef.current
+      : useMyImage && hasPersonalImages;
+
     const creditCost = calculateCreditCost({
-      usePersonalImage: useMyImage && hasPersonalImages,
+      usePersonalImage: willUsePersonalImage,
       useVoiceClone: useMyVoice && hasPersonalVoice,
     });
 
     if (
       !hasEnoughCredits(profile.credits, {
-        usePersonalImage: useMyImage && hasPersonalImages,
+        usePersonalImage: willUsePersonalImage,
         useVoiceClone: useMyVoice && hasPersonalVoice,
       })
     ) {
@@ -265,7 +271,33 @@ export function AffirmationModal({
 
           // If auto-generate images is on, generate image automatically
           if (autoGenerateImages) {
-            void generateImage({ docId: docRef.id, silent: true });
+            console.log(
+              '[AffirmationModal] Auto-generating image for affirmation:',
+              data.affirmation.substring(0, 50)
+            );
+            // Auto-generate will use personal images if available
+            // Set useMyImage to true if personal images are available
+            if (
+              hasPersonalImages &&
+              !personalImageManuallyDisabledRef.current
+            ) {
+              setUseMyImage(true);
+            }
+            // Pass affirmation text directly to avoid state timing issues
+            generateImage({
+              docId: docRef.id,
+              silent: true,
+              affirmationText: data.affirmation,
+            }).catch((error) => {
+              console.error(
+                '[AffirmationModal] Auto image generation error:',
+                error
+              );
+            });
+          } else {
+            console.log(
+              '[AffirmationModal] Auto-generate images is OFF, skipping automatic image generation'
+            );
           }
         } catch (saveError) {
           console.error(
@@ -343,8 +375,33 @@ export function AffirmationModal({
   const generateImage = async (options?: {
     docId?: string;
     silent?: boolean;
+    affirmationText?: string;
   }) => {
-    if (!affirmation || !category) return;
+    const affirmationToUse = options?.affirmationText ?? affirmation;
+    if (!options?.silent) {
+      console.log('[AffirmationModal] generateImage called', {
+        hasAffirmation: !!affirmationToUse,
+        hasCategory: !!category,
+        useMyImage,
+        hasPersonalImages,
+      });
+    }
+    if (!affirmationToUse || !category) {
+      if (!options?.silent) {
+        console.warn(
+          '[AffirmationModal] Cannot generate image: missing affirmation or category'
+        );
+      } else {
+        console.warn(
+          '[AffirmationModal] Auto image generation skipped: missing affirmation or category',
+          {
+            hasAffirmation: !!affirmationToUse,
+            hasCategory: !!category,
+          }
+        );
+      }
+      return;
+    }
     if (!user || !profile) {
       toast({
         title: 'Sign in required',
@@ -381,7 +438,7 @@ export function AffirmationModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          affirmation,
+          affirmation: affirmationToUse,
           category: category.title,
           categoryId: category.id,
           useUserImages: useMyImage && hasPersonalImages,
@@ -450,6 +507,9 @@ export function AffirmationModal({
               : 'Something went wrong while creating the image. Please try again.',
           variant: 'destructive',
         });
+      } else {
+        // Log silently for auto-generation failures
+        console.warn('[AffirmationModal] Auto image generation failed:', error);
       }
     } finally {
       setIsGeneratingImage(false);
@@ -883,8 +943,19 @@ export function AffirmationModal({
     }
   };
 
+  const isProcessing = isGenerating || isGeneratingImage;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(newOpen) => {
+        // Prevent closing during generation
+        if (!newOpen && isProcessing) {
+          return;
+        }
+        onOpenChange(newOpen);
+      }}
+    >
       <DialogContent className='max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl'>
         {/* {hasMultipleCategories && (
           <>
@@ -917,6 +988,7 @@ export function AffirmationModal({
                 size='icon'
                 className='absolute -left-1 top-1/2 translate-y-0  bg-transparent backdrop-blur hover:bg-primary/40'
                 onClick={() => onNavigate(-1)}
+                disabled={isProcessing}
                 aria-label='Previous category'
               >
                 <ChevronLeft className='h-4 w-4' />
@@ -926,6 +998,7 @@ export function AffirmationModal({
                 size='icon'
                 className='absolute -right-1 top-1/2 translate-y-0  bg-transparent backdrop-blur hover:bg-primary/40'
                 onClick={() => onNavigate(1)}
+                disabled={isProcessing}
                 aria-label='Next category'
               >
                 <ChevronRight className='h-4 w-4 hover:text-secondary' />
@@ -1043,7 +1116,7 @@ export function AffirmationModal({
             <Button
               variant='outline'
               onClick={speakAffirmation}
-              disabled={isGenerating || !affirmation}
+              disabled={isProcessing || !affirmation}
               className='gap-2 bg-transparent w-10 bg-blue-200/60 hover:bg-blue-400 hover:cursor-pointer'
             >
               {isSpeaking ? (

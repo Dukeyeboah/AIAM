@@ -70,7 +70,7 @@ export const CREDIT_PACKS = [
     id: 'starter',
     title: 'Starter',
     description: '500 aiams • ~25 affirmations',
-    price: '$4.99',
+    price: '$1.00',
     credits: 500,
     costPer100: '$1.00',
   },
@@ -124,6 +124,8 @@ export default function AccountPage() {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const [voicePreviewUrl, setVoicePreviewUrl] = useState<string | null>(null);
   const recordedChunksRef = useRef<BlobPart[]>([]);
+  const [savingAutoGenerate, setSavingAutoGenerate] = useState(false);
+  const [autoGenerateConfirmOpen, setAutoGenerateConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (profile?.displayName) {
@@ -207,7 +209,6 @@ export default function AccountPage() {
       gender !== (profile?.gender ?? undefined) ||
       ethnicity !== (profile?.ethnicity ?? undefined) ||
       nationality.trim() !== (profile?.nationality ?? '') ||
-      autoGenerateImagesPref !== (profile?.autoGenerateImages ?? true) ||
       defaultAspectRatio !== (profile?.defaultAspectRatio ?? '1:1')
     );
   }, [
@@ -219,7 +220,6 @@ export default function AccountPage() {
     gender,
     ethnicity,
     nationality,
-    autoGenerateImagesPref,
     defaultAspectRatio,
     profile?.displayName,
     profile?.photoURL,
@@ -365,7 +365,6 @@ export default function AccountPage() {
         gender: gender ?? null,
         ethnicity: ethnicity ?? null,
         nationality: nationality.trim() ? nationality.trim() : null,
-        autoGenerateImages: autoGenerateImagesPref,
         defaultAspectRatio: defaultAspectRatio,
       });
 
@@ -390,6 +389,53 @@ export default function AccountPage() {
   const openCreditsModal = (tierId?: string) => {
     setSelectedTier(tierId ?? null);
     setCreditsModalOpen(true);
+  };
+
+  const handleSaveAutoGenerate = async () => {
+    if (!user || !profile) {
+      toast({
+        title: 'You need an account',
+        description: 'Log in to update your preferences.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSavingAutoGenerate(true);
+    try {
+      const userDoc = doc(firebaseDb, 'users', user.uid);
+      await updateDoc(userDoc, {
+        autoGenerateImages: autoGenerateImagesPref,
+        updatedAt: serverTimestamp(),
+      });
+
+      await refreshProfile();
+      setAutoGenerateConfirmOpen(false);
+      toast({
+        title: 'Preference saved',
+        description: autoGenerateImagesPref
+          ? 'Images will now be generated automatically with each affirmation.'
+          : 'Images will no longer be generated automatically. You can generate them manually when needed.',
+      });
+    } catch (error) {
+      console.error(
+        '[AccountPage] Failed to save auto-generate preference',
+        error
+      );
+      toast({
+        title: 'Unable to save preference',
+        description: 'Please try again shortly.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingAutoGenerate(false);
+    }
+  };
+
+  const handleAutoGenerateToggle = (checked: boolean) => {
+    setAutoGenerateImagesPref(checked);
+    // Show confirmation dialog
+    setAutoGenerateConfirmOpen(true);
   };
 
   const handlePurchase = async (packId: string) => {
@@ -831,7 +877,7 @@ export default function AccountPage() {
                 </p>
               </div>
               <div className='flex items-center justify-between gap-4 rounded-2xl bg-muted/30 px-4 py-3'>
-                <div>
+                <div className='flex-1'>
                   <p className='text-sm font-medium text-foreground'>
                     Generate images automatically
                   </p>
@@ -840,11 +886,30 @@ export default function AccountPage() {
                     this off.
                   </p>
                 </div>
-                <Switch
-                  id='auto-generate-images'
-                  checked={autoGenerateImagesPref}
-                  onCheckedChange={(value) => setAutoGenerateImagesPref(value)}
-                />
+                <div className='flex items-center gap-3'>
+                  <Switch
+                    id='auto-generate-images'
+                    checked={autoGenerateImagesPref}
+                    onCheckedChange={handleAutoGenerateToggle}
+                  />
+                  {autoGenerateImagesPref !==
+                    (profile?.autoGenerateImages ?? true) && (
+                    <Button
+                      size='sm'
+                      onClick={handleSaveAutoGenerate}
+                      disabled={savingAutoGenerate}
+                    >
+                      {savingAutoGenerate ? (
+                        <>
+                          <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                          Saving...
+                        </>
+                      ) : (
+                        'Save'
+                      )}
+                    </Button>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -1212,6 +1277,47 @@ export default function AccountPage() {
             Payments are not enabled yet. We’ll notify you when credit purchases
             are live.
           </p>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={autoGenerateConfirmOpen}
+        onOpenChange={setAutoGenerateConfirmOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save auto-generate preference?</DialogTitle>
+            <DialogDescription>
+              {autoGenerateImagesPref
+                ? 'Images will be automatically generated with each new affirmation. This will use your personal reference images if available.'
+                : 'Images will no longer be generated automatically. You can generate them manually when needed.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className='flex justify-end gap-3 mt-4'>
+            <Button
+              variant='outline'
+              onClick={() => {
+                setAutoGenerateConfirmOpen(false);
+                // Revert toggle if cancelled
+                setAutoGenerateImagesPref(profile?.autoGenerateImages ?? true);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveAutoGenerate}
+              disabled={savingAutoGenerate}
+            >
+              {savingAutoGenerate ? (
+                <>
+                  <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                  Saving...
+                </>
+              ) : (
+                'Save'
+              )}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </>
