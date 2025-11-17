@@ -91,7 +91,10 @@ export default function PlaylistsPage() {
             Create and manage your custom affirmation playlists.
           </p>
         </div>
-        <Button className='cursor-pointer' onClick={() => router.push('/playlists/create')}>
+        <Button
+          className='cursor-pointer'
+          onClick={() => router.push('/playlists/create')}
+        >
           <Plus className='mr-2 h-4 w-4' />
           Create Playlist
         </Button>
@@ -109,7 +112,10 @@ export default function PlaylistsPage() {
             <p className='text-muted-foreground'>
               No playlists yet. Create your first playlist to get started.
             </p>
-            <Button className='cursor-pointer' onClick={() => router.push('/playlists/create')}>
+            <Button
+              className='cursor-pointer'
+              onClick={() => router.push('/playlists/create')}
+            >
               <Plus className='mr-2 h-4 w-4' />
               Create Playlist
             </Button>

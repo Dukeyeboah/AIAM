@@ -64,6 +64,11 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { ChevronDown } from 'lucide-react';
+import { loadStripe, type Stripe as StripeType } from '@stripe/stripe-js';
+
+const stripePromise = loadStripe(
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || ''
+);
 
 export const CREDIT_PACKS = [
   {
@@ -177,6 +182,24 @@ export default function AccountPage() {
       const params = new URLSearchParams(searchParams.toString());
       params.delete('purchase');
       router.replace(`/account${params.size ? `?${params}` : ''}`);
+    } else if (searchParams?.get('purchase') === 'success') {
+      toast({
+        title: 'Payment successful',
+        description: 'Your aiams have been added. Thank you!',
+      });
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('purchase');
+      router.replace(`/account${params.size ? `?${params}` : ''}`);
+      // Refresh profile to show updated credits
+      void refreshProfile();
+    } else if (searchParams?.get('purchase') === 'cancel') {
+      toast({
+        title: 'Payment cancelled',
+        description: 'No charges were made. You can try again anytime.',
+      });
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('purchase');
+      router.replace(`/account${params.size ? `?${params}` : ''}`);
     }
     if (searchParams?.get('setup') === 'images') {
       const params = new URLSearchParams(searchParams.toString());
@@ -189,7 +212,7 @@ export default function AccountPage() {
         });
       }, 200);
     }
-  }, [router, searchParams]);
+  }, [router, searchParams, toast, refreshProfile]);
 
   useEffect(() => {
     return () => {
@@ -452,27 +475,37 @@ export default function AccountPage() {
     if (!pack) return;
 
     try {
-      const userDoc = doc(firebaseDb, 'users', user.uid);
-      const currentCredits = profile.credits ?? 0;
-      await updateDoc(userDoc, {
-        credits: currentCredits + pack.credits,
-        updatedAt: serverTimestamp(),
+      const res = await fetch('/api/stripe/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ packId, userId: user.uid }),
       });
 
-      await refreshProfile();
-      setCreditsModalOpen(false);
-      toast({
-        title: `Aiams added!`,
-        description: `You've received ${pack.credits} aiams. Continue creating personalized affirmations!`,
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? 'Unable to start checkout.');
+      }
+
+      const { sessionId } = await res.json();
+      const stripe = await stripePromise;
+      if (!stripe) {
+        throw new Error(
+          'Stripe failed to load. Please check your publishable key.'
+        );
+      }
+
+      // redirectToCheckout either succeeds (void) or throws an error
+      await (stripe as any).redirectToCheckout({
+        sessionId: sessionId as string,
       });
     } catch (error) {
-      console.error('[AccountPage] Failed to process purchase', error);
+      console.error('[AccountPage] Stripe checkout failed', error);
       toast({
-        title: 'Purchase failed',
+        title: 'Checkout failed',
         description:
           error instanceof Error
             ? error.message
-            : 'Unable to process purchase. Please try again.',
+            : 'Unable to start checkout. Please try again.',
         variant: 'destructive',
       });
     }
