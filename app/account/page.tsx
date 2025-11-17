@@ -1093,7 +1093,7 @@ export default function AccountPage() {
                 </span>
                 <span className='text-muted-foreground'>aiams</span>
               </div>
-              <Button className='w-full' onClick={() => openCreditsModal()}>
+              <Button className='w-full cursor-pointer' onClick={() => openCreditsModal()}>
                 Add aiams
               </Button>
               <Collapsible className='space-y-2'>
