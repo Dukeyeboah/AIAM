@@ -40,7 +40,11 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json({ sessionId: session.id });
+    // Return the session URL for direct redirect (new Stripe.js approach)
+    return NextResponse.json({
+      sessionId: session.id,
+      url: session.url,
+    });
   } catch (error) {
     console.error('[stripe] create-checkout-session error', error);
     return NextResponse.json(

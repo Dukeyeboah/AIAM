@@ -502,18 +502,14 @@ export default function AccountPage() {
         throw new Error(data.error ?? 'Unable to start checkout.');
       }
 
-      const { sessionId } = await res.json();
-      const stripe = await stripePromise;
-      if (!stripe) {
-        throw new Error(
-          'Stripe failed to load. Please check your publishable key.'
-        );
+      const { url, sessionId } = await res.json();
+
+      if (!url) {
+        throw new Error('No checkout URL received from server.');
       }
 
-      // redirectToCheckout either succeeds (void) or throws an error
-      await (stripe as any).redirectToCheckout({
-        sessionId: sessionId as string,
-      });
+      // Use standard redirect instead of deprecated redirectToCheckout
+      window.location.href = url;
     } catch (error) {
       console.error('[AccountPage] Stripe checkout failed', error);
       toast({
