@@ -66,9 +66,15 @@ import {
 import { ChevronDown } from 'lucide-react';
 import { loadStripe, type Stripe as StripeType } from '@stripe/stripe-js';
 
-const stripePromise = loadStripe(
-  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || ''
-);
+const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+
+if (!publishableKey) {
+  console.warn(
+    '[AccountPage] NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is not set. Stripe checkout will not work.'
+  );
+}
+
+const stripePromise = publishableKey ? loadStripe(publishableKey) : null;
 
 export const CREDIT_PACKS = [
   {
@@ -466,6 +472,16 @@ export default function AccountPage() {
       toast({
         title: 'Sign in required',
         description: 'Please sign in to purchase aiams.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!publishableKey) {
+      toast({
+        title: 'Stripe not configured',
+        description:
+          'Payment processing is not available. Please add NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY to your environment variables.',
         variant: 'destructive',
       });
       return;
