@@ -95,7 +95,7 @@ export default function PlaylistsPage() {
           className='cursor-pointer'
           onClick={() => router.push('/playlists/create')}
         >
-          <Plus className='mr-2 h-4 w-4' />
+          <Plus className='mr-2 h-4 w-4'/>
           Create Playlist
         </Button>
       </div>
