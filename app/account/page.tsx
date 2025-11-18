@@ -189,16 +189,95 @@ export default function AccountPage() {
       params.delete('purchase');
       router.replace(`/account${params.size ? `?${params}` : ''}`);
     } else if (searchParams?.get('purchase') === 'success') {
-      toast({
-        title: 'Payment successful',
-        description: 'Your aiams have been added. Thank you!',
+      // Get stored sessionId and verify payment
+      const storedSessionId = sessionStorage.getItem('pendingStripeSessionId');
+      const storedUserId = sessionStorage.getItem('pendingStripeUserId');
+
+      // Clean up stored values
+      sessionStorage.removeItem('pendingStripeSessionId');
+      sessionStorage.removeItem('pendingStripeUserId');
+
+      // Refresh profile first to get current credits
+      void refreshProfile().then(async () => {
+        const previousCredits = profile?.credits ?? 0;
+
+        // If we have a sessionId, verify payment and add credits if needed
+        if (storedSessionId && storedUserId && user?.uid === storedUserId) {
+          try {
+            const verifyRes = await fetch('/api/stripe/verify-payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sessionId: storedSessionId,
+                userId: storedUserId,
+              }),
+            });
+
+            if (verifyRes.ok) {
+              const verifyData = await verifyRes.json();
+              if (verifyData.success && !verifyData.alreadyProcessed) {
+                // Credits were just added via fallback
+                console.log(
+                  '[AccountPage] Credits added via verify-payment endpoint'
+                );
+                await refreshProfile();
+                toast({
+                  title: 'Payment successful!',
+                  description: `Your ${verifyData.creditsAdded} aiams have been added. Thank you!`,
+                });
+              } else if (verifyData.alreadyProcessed) {
+                // Already processed (webhook worked)
+                await refreshProfile();
+                toast({
+                  title: 'Payment successful!',
+                  description: 'Your aiams have been added. Thank you!',
+                });
+              } else {
+                // Verification failed but payment was successful
+                await refreshProfile();
+                toast({
+                  title: 'Payment successful',
+                  description:
+                    "Your aiams should be added shortly. If they don't appear, please refresh the page.",
+                });
+              }
+            } else {
+              // Verification failed, but still show success message
+              await refreshProfile();
+              toast({
+                title: 'Payment successful',
+                description:
+                  "Your aiams should be added shortly. If they don't appear, please refresh the page.",
+              });
+            }
+          } catch (error) {
+            console.error('[AccountPage] Payment verification failed', error);
+            await refreshProfile();
+            toast({
+              title: 'Payment successful',
+              description:
+                "Your aiams should be added shortly. If they don't appear, please refresh the page.",
+            });
+          }
+        } else {
+          // No sessionId stored, just refresh and show success
+          await refreshProfile();
+          toast({
+            title: 'Payment successful',
+            description:
+              "Your aiams should be added shortly. If they don't appear, please refresh the page.",
+          });
+        }
       });
+
       const params = new URLSearchParams(searchParams.toString());
       params.delete('purchase');
       router.replace(`/account${params.size ? `?${params}` : ''}`);
-      // Refresh profile to show updated credits
-      void refreshProfile();
     } else if (searchParams?.get('purchase') === 'cancel') {
+      // Clean up stored session data
+      sessionStorage.removeItem('pendingStripeSessionId');
+      sessionStorage.removeItem('pendingStripeUserId');
+
       toast({
         title: 'Payment cancelled',
         description: 'No charges were made. You can try again anytime.',
@@ -506,6 +585,12 @@ export default function AccountPage() {
 
       if (!url) {
         throw new Error('No checkout URL received from server.');
+      }
+
+      // Store sessionId to verify payment on return
+      if (sessionId) {
+        sessionStorage.setItem('pendingStripeSessionId', sessionId);
+        sessionStorage.setItem('pendingStripeUserId', user.uid);
       }
 
       // Use standard redirect instead of deprecated redirectToCheckout
@@ -1093,7 +1178,10 @@ export default function AccountPage() {
                 </span>
                 <span className='text-muted-foreground'>aiams</span>
               </div>
-              <Button className='w-full cursor-pointer' onClick={() => openCreditsModal()}>
+              <Button
+                className='w-full cursor-pointer'
+                onClick={() => openCreditsModal()}
+              >
                 Add aiams
               </Button>
               <Collapsible className='space-y-2'>
