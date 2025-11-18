@@ -81,9 +81,9 @@ export const CREDIT_PACKS = [
     id: 'starter',
     title: 'Starter',
     description: '500 aiams • ~25 affirmations',
-    price: '$1.00',
+    price: '$5.99',
     credits: 500,
-    costPer100: '$1.00',
+    costPer100: '$5.99',
   },
   {
     id: 'creator',

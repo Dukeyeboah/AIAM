@@ -16,20 +16,7 @@ export const metadata: Metadata = {
     'Generate personalized affirmations for every aspect of your life',
   generator: 'v0.app',
   icons: {
-    icon: [
-      {
-        url: '/images/aiam_textlogo_blk.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/images/aiam_textlogo_blk.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
+    icon: '/favicon.ico',
     apple: '/apple-icon.png',
   },
 };
