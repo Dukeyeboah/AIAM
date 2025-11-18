@@ -106,7 +106,7 @@ export const CREDIT_PACKS = [
 export type PackId = (typeof CREDIT_PACKS)[number]['id'];
 
 export default function AccountPage() {
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile, authLoading } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
   const { toast } = useToast();
@@ -193,6 +193,13 @@ export default function AccountPage() {
       const storedSessionId = sessionStorage.getItem('pendingStripeSessionId');
       const storedUserId = sessionStorage.getItem('pendingStripeUserId');
 
+      console.log('[AccountPage] Purchase success detected', {
+        hasSessionId: !!storedSessionId,
+        hasUserId: !!storedUserId,
+        currentUserId: user?.uid,
+        sessionId: storedSessionId,
+      });
+
       // Clean up stored values
       sessionStorage.removeItem('pendingStripeSessionId');
       sessionStorage.removeItem('pendingStripeUserId');
@@ -200,9 +207,14 @@ export default function AccountPage() {
       // Refresh profile first to get current credits
       void refreshProfile().then(async () => {
         const previousCredits = profile?.credits ?? 0;
+        console.log('[AccountPage] Previous credits:', previousCredits);
 
         // If we have a sessionId, verify payment and add credits if needed
         if (storedSessionId && storedUserId && user?.uid === storedUserId) {
+          console.log(
+            '[AccountPage] Verifying payment with sessionId:',
+            storedSessionId
+          );
           try {
             const verifyRes = await fetch('/api/stripe/verify-payment', {
               method: 'POST',
@@ -213,12 +225,19 @@ export default function AccountPage() {
               }),
             });
 
+            const verifyData = await verifyRes.json();
+            console.log('[AccountPage] Verify payment response:', {
+              ok: verifyRes.ok,
+              status: verifyRes.status,
+              data: verifyData,
+            });
+
             if (verifyRes.ok) {
-              const verifyData = await verifyRes.json();
               if (verifyData.success && !verifyData.alreadyProcessed) {
                 // Credits were just added via fallback
                 console.log(
-                  '[AccountPage] Credits added via verify-payment endpoint'
+                  '[AccountPage] Credits added via verify-payment endpoint:',
+                  verifyData.creditsAdded
                 );
                 await refreshProfile();
                 toast({
@@ -227,6 +246,7 @@ export default function AccountPage() {
                 });
               } else if (verifyData.alreadyProcessed) {
                 // Already processed (webhook worked)
+                console.log('[AccountPage] Payment already processed');
                 await refreshProfile();
                 toast({
                   title: 'Payment successful!',
@@ -234,6 +254,10 @@ export default function AccountPage() {
                 });
               } else {
                 // Verification failed but payment was successful
+                console.warn(
+                  '[AccountPage] Verification returned unexpected result:',
+                  verifyData
+                );
                 await refreshProfile();
                 toast({
                   title: 'Payment successful',
@@ -243,11 +267,14 @@ export default function AccountPage() {
               }
             } else {
               // Verification failed, but still show success message
+              console.error('[AccountPage] Verify payment failed:', verifyData);
               await refreshProfile();
               toast({
                 title: 'Payment successful',
-                description:
-                  "Your aiams should be added shortly. If they don't appear, please refresh the page.",
+                description: `Verification failed: ${
+                  verifyData.error || 'Unknown error'
+                }. Please contact support if credits don't appear.`,
+                variant: 'destructive',
               });
             }
           } catch (error) {
@@ -256,16 +283,22 @@ export default function AccountPage() {
             toast({
               title: 'Payment successful',
               description:
-                "Your aiams should be added shortly. If they don't appear, please refresh the page.",
+                "Error verifying payment. Please contact support if credits don't appear.",
+              variant: 'destructive',
             });
           }
         } else {
           // No sessionId stored, just refresh and show success
+          console.warn('[AccountPage] No sessionId found in sessionStorage', {
+            storedSessionId,
+            storedUserId,
+            currentUserId: user?.uid,
+          });
           await refreshProfile();
           toast({
             title: 'Payment successful',
             description:
-              "Your aiams should be added shortly. If they don't appear, please refresh the page.",
+              'Session data not found. Please refresh the page to see your updated credits.',
           });
         }
       });
@@ -591,6 +624,12 @@ export default function AccountPage() {
       if (sessionId) {
         sessionStorage.setItem('pendingStripeSessionId', sessionId);
         sessionStorage.setItem('pendingStripeUserId', user.uid);
+        console.log('[AccountPage] Stored sessionId for verification:', {
+          sessionId,
+          userId: user.uid,
+        });
+      } else {
+        console.warn('[AccountPage] No sessionId received from server');
       }
 
       // Use standard redirect instead of deprecated redirectToCheckout
@@ -783,6 +822,21 @@ export default function AccountPage() {
     }
   };
 
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <main className='container mx-auto max-w-3xl px-6 py-12'>
+        <Card>
+          <CardHeader>
+            <CardTitle>Account</CardTitle>
+            <CardDescription>Loading...</CardDescription>
+          </CardHeader>
+        </Card>
+      </main>
+    );
+  }
+
+  // Show sign-in prompt only if user is definitely not authenticated
   if (!user || !profile) {
     return (
       <main className='container mx-auto max-w-3xl px-6 py-12'>

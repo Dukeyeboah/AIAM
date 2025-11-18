@@ -29,7 +29,7 @@ import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 
 export default function DashboardPage() {
-  const { user, profile } = useAuth();
+  const { user, profile, authLoading } = useAuth();
   const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState<string | 'all'>(
     'all'
@@ -152,6 +152,21 @@ export default function DashboardPage() {
     }
   };
 
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <main className='container mx-auto max-w-5xl px-6 py-12'>
+        <Card>
+          <CardHeader>
+            <CardTitle>Dashboard</CardTitle>
+            <CardDescription>Loading...</CardDescription>
+          </CardHeader>
+        </Card>
+      </main>
+    );
+  }
+
+  // Show sign-in prompt only if user is definitely not authenticated
   if (!user) {
     return (
       <main className='container mx-auto max-w-5xl px-6 py-12'>

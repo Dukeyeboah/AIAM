@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { Plus, Play, Trash2, MoreVertical } from 'lucide-react';
+import { Plus, Play, Trash2, MoreVertical, ArrowLeft } from 'lucide-react';
 import { doc, deleteDoc } from 'firebase/firestore';
 
 import {
@@ -25,7 +25,7 @@ import { firebaseDb } from '@/lib/firebase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function PlaylistsPage() {
-  const { user } = useAuth();
+  const { user, authLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
   const { playlists, loading } = usePlaylists();
@@ -67,6 +67,21 @@ export default function PlaylistsPage() {
     }
   };
 
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <main className='container mx-auto max-w-5xl px-6 py-12'>
+        <Card>
+          <CardHeader>
+            <CardTitle>Playlists</CardTitle>
+            <CardDescription>Loading...</CardDescription>
+          </CardHeader>
+        </Card>
+      </main>
+    );
+  }
+
+  // Show sign-in prompt only if user is definitely not authenticated
   if (!user) {
     return (
       <main className='container mx-auto max-w-5xl px-6 py-12'>
@@ -85,17 +100,28 @@ export default function PlaylistsPage() {
   return (
     <main className='container mx-auto max-w-6xl px-6 py-8 space-y-6'>
       <div className='flex items-center justify-between'>
-        <div>
-          <h1 className='text-3xl font-semibold'>Playlists</h1>
-          <p className='text-muted-foreground'>
-            Create and manage your custom affirmation playlists.
-          </p>
+        <div className='flex items-center gap-4'>
+          <Button
+            variant='ghost'
+            size='icon'
+            className='cursor-pointer'
+            onClick={() => router.push('/dashboard')}
+            title='Back to Dashboard'
+          >
+            <ArrowLeft className='h-4 w-4' />
+          </Button>
+          <div>
+            <h1 className='text-3xl font-semibold'>Playlists</h1>
+            <p className='text-muted-foreground'>
+              Create and manage your custom affirmation playlists.
+            </p>
+          </div>
         </div>
         <Button
           className='cursor-pointer'
           onClick={() => router.push('/playlists/create')}
         >
-          <Plus className='mr-2 h-4 w-4'/>
+          <Plus className='mr-2 h-4 w-4' />
           Create Playlist
         </Button>
       </div>

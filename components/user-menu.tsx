@@ -9,6 +9,7 @@ import {
   Coins,
   LayoutDashboard,
   Info,
+  Home,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -110,6 +111,17 @@ export function UserMenu() {
           <span className='font-semibold'>{profile.credits ?? 0}</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={(event) => {
+            event.preventDefault();
+            router.push('/');
+            closeMenu();
+          }}
+          className='flex items-center gap-2 cursor-pointer'
+        >
+          <Home className='h-4 w-4' />
+          Home
+        </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={(event) => {
             event.preventDefault();
