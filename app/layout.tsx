@@ -11,7 +11,7 @@ import { AppShell } from '@/components/app-shell';
 const geist = Geist({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'AiAm - Daily Affirmations for Your Soul',
+  title: 'aiam - Daily Affirmations for Your Soul',
   description:
     'Generate personalized affirmations for every aspect of your life',
   generator: 'v0.app',

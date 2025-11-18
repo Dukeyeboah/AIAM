@@ -6,6 +6,7 @@ import { useMemo } from 'react';
 import { UserRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserMenu } from '@/components/user-menu';
+import { MusicPlayer } from '@/components/music-player';
 import { useAuth } from '@/providers/auth-provider';
 import { useAuthModal } from '@/providers/auth-modal-provider';
 
@@ -31,6 +32,7 @@ export function AppHeader() {
         />
       </Link>
       <div className='flex items-center gap-3'>
+        <MusicPlayer />
         {showAuthButton ? (
           <Button
             variant='outline'
