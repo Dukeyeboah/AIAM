@@ -974,6 +974,11 @@ export function UserAffirmationCard({
                 <ImageIcon className='h-4 w-4' />
               )}
             </Button>
+            {useMyVoice && hasPersonalVoice && (
+              <Badge className='bg-purple-500/80 text-white border-transparent text-xs px-2 py-0.5'>
+                Your Voice
+              </Badge>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger
                 asChild

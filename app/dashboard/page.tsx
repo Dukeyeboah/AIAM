@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { PlusCircle, FolderPlus, Play } from 'lucide-react';
 
@@ -29,7 +29,7 @@ import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 
 export default function DashboardPage() {
-  const { user, profile, authLoading } = useAuth();
+  const { user, profile, authLoading, refreshProfile } = useAuth();
   const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState<string | 'all'>(
     'all'
@@ -39,12 +39,63 @@ export default function DashboardPage() {
   });
   const { toast } = useToast();
   const [isPlayingAll, setIsPlayingAll] = useState(false);
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string>('');
+  const [voices, setVoices] = useState<
+    Array<{ id: string; name: string; description: string }>
+  >([]);
+  const [loadingVoices, setLoadingVoices] = useState(false);
 
   const greeting = useMemo(() => {
     if (!profile?.displayName) return 'Your dashboard';
     const firstName = profile.displayName.trim().split(/\s+/)[0];
     return `${firstName}'s dashboard`;
   }, [profile?.displayName]);
+
+  // Load voices and set default
+  useEffect(() => {
+    const loadVoices = async () => {
+      setLoadingVoices(true);
+      try {
+        const response = await fetch('/api/voices');
+        if (!response.ok) {
+          throw new Error('Unable to load voices right now.');
+        }
+        const data = await response.json();
+        const options =
+          data.voices?.map((voice: any) => ({
+            id: voice.voice_id ?? voice.id,
+            name: voice.name,
+            description: voice.description ?? voice.labels?.description ?? '',
+          })) ?? [];
+
+        // Add cloned voice option if available
+        if (profile?.voiceCloneId) {
+          options.unshift({
+            id: profile.voiceCloneId,
+            name: profile.voiceCloneName ?? 'Your Voice',
+            description: 'Your personal cloned voice',
+          });
+        }
+
+        setVoices(options);
+        // Set default to cloned voice if available, otherwise first AI voice
+        if (!selectedVoiceId) {
+          setSelectedVoiceId(
+            profile?.voiceCloneId ?? options[0]?.id ?? 'EXAVITQu4vr4xnSDxMaL'
+          );
+        }
+      } catch (error) {
+        console.error('[dashboard] Failed to load voices', error);
+      } finally {
+        setLoadingVoices(false);
+      }
+    };
+
+    if (user) {
+      void loadVoices();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, profile?.voiceCloneId, profile?.voiceCloneName]);
 
   const playSequentially = (url: string) =>
     new Promise<void>((resolve, reject) => {
@@ -73,8 +124,18 @@ export default function DashboardPage() {
       return;
     }
 
+    if (!selectedVoiceId) {
+      toast({
+        title: 'Select a voice',
+        description: 'Please choose a voice to play all affirmations.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsPlayingAll(true);
-    const voiceId = profile?.voiceCloneId ?? 'EXAVITQu4vr4xnSDxMaL';
+    const voiceId = selectedVoiceId;
+    const isClonedVoice = voiceId === profile?.voiceCloneId;
     try {
       for (const item of affirmations) {
         let audioUrl = item.audioUrls?.[voiceId];
@@ -132,6 +193,22 @@ export default function DashboardPage() {
         }
 
         await playSequentially(audioUrl);
+
+        // Deduct credits if using cloned voice (only once per affirmation if not cached)
+        if (isClonedVoice && !item.audioUrls?.[voiceId] && profile) {
+          const { hasEnoughCredits } = await import('@/lib/credit-utils');
+          if (hasEnoughCredits(profile.credits, { useVoiceClone: true })) {
+            const { VOICE_CLONE_COST } = await import('@/lib/credit-utils');
+            const newCredits = profile.credits - VOICE_CLONE_COST;
+            const userDocRef = doc(firebaseDb, 'users', user.uid);
+            await updateDoc(userDocRef, {
+              credits: newCredits,
+              updatedAt: serverTimestamp(),
+            });
+            // Refresh profile to update credits in UI
+            await refreshProfile();
+          }
+        }
       }
       toast({
         title: 'Playback finished',
@@ -192,16 +269,36 @@ export default function DashboardPage() {
             prep playlists.
           </p>
         </div>
-        <div className='flex gap-3'>
-          <Button
-            variant='default'
-            onClick={playAll}
-            disabled={isPlayingAll || affirmations.length === 0}
-            className='flex items-center gap-2'
-          >
-            <Play className='h-4 w-4' />
-            {isPlayingAll ? 'Playing…' : 'Play all'}
-          </Button>
+        <div className='flex gap-3 items-center'>
+          <div className='flex items-center gap-2'>
+            <Select
+              value={selectedVoiceId}
+              onValueChange={setSelectedVoiceId}
+              disabled={isPlayingAll || loadingVoices}
+            >
+              <SelectTrigger className='w-[180px]'>
+                <SelectValue placeholder='Select voice' />
+              </SelectTrigger>
+              <SelectContent>
+                {voices.map((voice) => (
+                  <SelectItem key={voice.id} value={voice.id}>
+                    {voice.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant='default'
+              onClick={playAll}
+              disabled={
+                isPlayingAll || affirmations.length === 0 || !selectedVoiceId
+              }
+              className='flex items-center gap-2'
+            >
+              <Play className='h-4 w-4' />
+              {isPlayingAll ? 'Playing…' : 'Play all'}
+            </Button>
+          </div>
           <Button
             variant='secondary'
             onClick={() => router.push('/playlists')}

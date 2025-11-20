@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import type { Category } from './category-grid';
 import {
   RefreshCw,
@@ -1019,7 +1020,12 @@ export function AffirmationModal({
             </div>
             <span className='text-pretty'>{category.title}</span>
           </DialogTitle>
-          <div className='absolute left-0 top-1 -translate-y-1/2'>
+          <div className='absolute left-0 top-1 -translate-y-1/2 flex items-center gap-2'>
+            {useMyVoice && hasPersonalVoice && (
+              <Badge className='bg-purple-500/80 text-white border-transparent text-xs px-2 py-0.5'>
+                Your Voice
+              </Badge>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild disabled={useMyVoice}>
                 <Button

@@ -137,6 +137,7 @@ export default function AccountPage() {
   const recordedChunksRef = useRef<BlobPart[]>([]);
   const [savingAutoGenerate, setSavingAutoGenerate] = useState(false);
   const [autoGenerateConfirmOpen, setAutoGenerateConfirmOpen] = useState(false);
+  const [hasNewVoiceFile, setHasNewVoiceFile] = useState(false);
 
   useEffect(() => {
     if (profile?.displayName) {
@@ -157,6 +158,8 @@ export default function AccountPage() {
     if (profile?.voiceCloneName) {
       setVoiceCloneName(profile.voiceCloneName);
     }
+    // Reset new voice file flag when profile loads
+    setHasNewVoiceFile(false);
     setAgeRange(profile?.ageRange ?? undefined);
     setGender(profile?.gender ?? undefined);
     setEthnicity(profile?.ethnicity ?? undefined);
@@ -706,6 +709,7 @@ export default function AccountPage() {
       if (prev) URL.revokeObjectURL(prev);
       return URL.createObjectURL(file);
     });
+    setHasNewVoiceFile(true);
   };
 
   const resetVoicePreview = () => {
@@ -713,6 +717,7 @@ export default function AccountPage() {
       URL.revokeObjectURL(voicePreviewUrl);
     }
     setVoicePreviewUrl(null);
+    setHasNewVoiceFile(false);
   };
 
   const uploadVoiceClone = async () => {
@@ -778,6 +783,7 @@ export default function AccountPage() {
       setVoiceCloneId(data.voiceId);
       setVoiceCloneName(data.voiceName ?? null);
       resetVoicePreview();
+      setHasNewVoiceFile(false);
       toast({
         title: 'Voice cloned successfully',
         description: 'Your AiAm affirmations can now speak in your voice.',
@@ -807,6 +813,7 @@ export default function AccountPage() {
       await refreshProfile();
       setVoiceCloneId(null);
       setVoiceCloneName(null);
+      setHasNewVoiceFile(false);
       toast({
         title: 'Voice clone removed',
         description: 'You can upload a new sample whenever you are ready.',
@@ -1379,9 +1386,16 @@ export default function AccountPage() {
               <div className='flex flex-wrap items-center gap-3'>
                 <Button
                   variant='default'
-                  disabled={uploadingVoice}
+                  disabled={
+                    uploadingVoice || !!(voiceCloneId && !hasNewVoiceFile)
+                  }
                   onClick={uploadVoiceClone}
                   className='flex items-center gap-2'
+                  title={
+                    voiceCloneId && !hasNewVoiceFile
+                      ? 'Upload a new voice sample to replace the current one'
+                      : 'Save your voice sample'
+                  }
                 >
                   {uploadingVoice ? (
                     <Loader2 className='h-4 w-4 animate-spin' />
