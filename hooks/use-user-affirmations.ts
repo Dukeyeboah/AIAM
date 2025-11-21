@@ -19,6 +19,7 @@ export interface UserAffirmation {
   categoryTitle: string;
   imageUrl: string | null;
   favorite: boolean;
+  useMyVoice?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
   audioUrls?: Record<string, string>;
@@ -83,6 +84,7 @@ export function useUserAffirmations(options: UseUserAffirmationsOptions = {}) {
             categoryTitle: (data.categoryTitle as string) ?? '',
             imageUrl: (data.imageUrl as string | null) ?? null,
             favorite: Boolean(data.favorite),
+            useMyVoice: Boolean(data.useMyVoice),
             createdAt: data.createdAt?.toDate?.() ?? undefined,
             updatedAt: data.updatedAt?.toDate?.() ?? undefined,
             audioUrls,

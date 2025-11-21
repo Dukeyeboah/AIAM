@@ -50,6 +50,7 @@ export interface UserProfile {
   nationality?: string | null;
   autoGenerateImages?: boolean;
   defaultAspectRatio?: string | null;
+  useMyVoiceByDefault?: boolean;
   tier?: string | null;
   credits: number;
   savedCount: number;
@@ -132,6 +133,7 @@ const ensureUserProfile = async (firebaseUser: User): Promise<UserProfile> => {
     nationality: null,
     autoGenerateImages: true,
     defaultAspectRatio: '1:1',
+    useMyVoiceByDefault: false,
     tier: null,
     credits: DEFAULT_CREDITS,
     savedCount: 0,
@@ -167,6 +169,10 @@ const ensureUserProfile = async (firebaseUser: User): Promise<UserProfile> => {
         : true,
     defaultAspectRatio:
       (data.defaultAspectRatio as string | undefined) ?? '1:1',
+    useMyVoiceByDefault:
+      typeof data.useMyVoiceByDefault === 'boolean'
+        ? data.useMyVoiceByDefault
+        : false,
     credits: typeof data.credits === 'number' ? data.credits : DEFAULT_CREDITS,
     savedCount: typeof data.savedCount === 'number' ? data.savedCount : 0,
   };
@@ -185,6 +191,10 @@ const ensureUserProfile = async (firebaseUser: User): Promise<UserProfile> => {
     mergedProfile.autoGenerateImages !== data.autoGenerateImages ||
     mergedProfile.defaultAspectRatio !==
       (data.defaultAspectRatio as string | undefined) ||
+    mergedProfile.useMyVoiceByDefault !==
+      (typeof data.useMyVoiceByDefault === 'boolean'
+        ? data.useMyVoiceByDefault
+        : false) ||
     mergedProfile.tier !== (data.tier as string | undefined) ||
     typeof data.credits !== 'number' ||
     typeof data.savedCount !== 'number';
@@ -203,6 +213,7 @@ const ensureUserProfile = async (firebaseUser: User): Promise<UserProfile> => {
       nationality: mergedProfile.nationality ?? null,
       autoGenerateImages: mergedProfile.autoGenerateImages ?? true,
       defaultAspectRatio: mergedProfile.defaultAspectRatio ?? '1:1',
+      useMyVoiceByDefault: mergedProfile.useMyVoiceByDefault ?? false,
       tier: mergedProfile.tier ?? null,
       credits: mergedProfile.credits,
       savedCount: mergedProfile.savedCount,

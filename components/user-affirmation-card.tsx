@@ -94,7 +94,7 @@ export function UserAffirmationCard({
   const audioUrlIsObjectRef = useRef(false);
   const [isFavorite, setIsFavorite] = useState(affirmation.favorite);
   const [useMyImage, setUseMyImage] = useState(false);
-  const [useMyVoice, setUseMyVoice] = useState(false);
+  const [useMyVoice, setUseMyVoice] = useState(affirmation.useMyVoice ?? false);
   const [audioUrls, setAudioUrls] = useState<Record<string, string>>(
     affirmation.audioUrls ?? {}
   );
@@ -263,6 +263,16 @@ export function UserAffirmationCard({
       setUseMyVoice(false);
     }
   }, [useMyVoice, hasPersonalVoice]);
+
+  // Load useMyVoiceByDefault preference on mount
+  useEffect(() => {
+    if (profile?.useMyVoiceByDefault && hasPersonalVoice) {
+      setUseMyVoice(true);
+    } else if (!affirmation.useMyVoice && !profile?.useMyVoiceByDefault) {
+      // Only set to false if not already set in affirmation and not default
+      setUseMyVoice(false);
+    }
+  }, [profile?.useMyVoiceByDefault, hasPersonalVoice, affirmation.useMyVoice]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -716,7 +726,7 @@ export function UserAffirmationCard({
     setUseMyImage(checked);
   };
 
-  const handleUseMyVoiceToggle = (checked: boolean) => {
+  const handleUseMyVoiceToggle = async (checked: boolean) => {
     if (checked) {
       if (!user || !profile) {
         toast({
@@ -754,9 +764,24 @@ export function UserAffirmationCard({
       }
 
       setUseMyVoice(true);
-      return;
+    } else {
+      setUseMyVoice(false);
     }
-    setUseMyVoice(false);
+
+    // Save useMyVoice preference to Firestore
+    if (favoriteDocRef.current && user) {
+      try {
+        await updateDoc(favoriteDocRef.current, {
+          useMyVoice: checked,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (error) {
+        console.error(
+          '[affirmation-card] Failed to save useMyVoice preference',
+          error
+        );
+      }
+    }
   };
 
   const handleDelete = async () => {

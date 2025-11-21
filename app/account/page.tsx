@@ -138,6 +138,7 @@ export default function AccountPage() {
   const [savingAutoGenerate, setSavingAutoGenerate] = useState(false);
   const [autoGenerateConfirmOpen, setAutoGenerateConfirmOpen] = useState(false);
   const [hasNewVoiceFile, setHasNewVoiceFile] = useState(false);
+  const [useMyVoiceByDefault, setUseMyVoiceByDefault] = useState(false);
 
   useEffect(() => {
     if (profile?.displayName) {
@@ -157,6 +158,9 @@ export default function AccountPage() {
     }
     if (profile?.voiceCloneName) {
       setVoiceCloneName(profile.voiceCloneName);
+    }
+    if (typeof profile?.useMyVoiceByDefault === 'boolean') {
+      setUseMyVoiceByDefault(profile.useMyVoiceByDefault);
     }
     // Reset new voice file flag when profile loads
     setHasNewVoiceFile(false);
@@ -1421,6 +1425,60 @@ export default function AccountPage() {
                   </div>
                 )}
               </div>
+
+              {voiceCloneId && (
+                <div className='space-y-4 rounded-2xl border border-border/40 bg-muted/10 p-4'>
+                  <div className='flex items-center justify-between'>
+                    <div className='space-y-1'>
+                      <Label
+                        htmlFor='use-my-voice-default'
+                        className='text-base'
+                      >
+                        Use my voice by default
+                      </Label>
+                      <p className='text-sm text-muted-foreground'>
+                        When enabled, all affirmations will use your cloned
+                        voice by default. You can still toggle this per
+                        affirmation in your dashboard.
+                      </p>
+                    </div>
+                    <Switch
+                      id='use-my-voice-default'
+                      checked={useMyVoiceByDefault}
+                      onCheckedChange={async (checked) => {
+                        setUseMyVoiceByDefault(checked);
+                        if (!user) return;
+                        try {
+                          await updateDoc(doc(firebaseDb, 'users', user.uid), {
+                            useMyVoiceByDefault: checked,
+                            updatedAt: serverTimestamp(),
+                          });
+                          await refreshProfile();
+                          toast({
+                            title: checked
+                              ? 'Using your voice by default'
+                              : 'AI voices enabled by default',
+                            description: checked
+                              ? 'All affirmations will use your cloned voice. You can change this per affirmation.'
+                              : 'You can choose voices per affirmation.',
+                          });
+                        } catch (error) {
+                          console.error(
+                            '[AccountPage] Failed to update useMyVoiceByDefault',
+                            error
+                          );
+                          toast({
+                            title: 'Failed to update preference',
+                            description: 'Please try again.',
+                            variant: 'destructive',
+                          });
+                          setUseMyVoiceByDefault(!checked);
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </section>

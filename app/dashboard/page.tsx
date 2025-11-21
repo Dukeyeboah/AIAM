@@ -78,11 +78,15 @@ export default function DashboardPage() {
         }
 
         setVoices(options);
-        // Set default to cloned voice if available, otherwise first AI voice
+        // Set default based on useMyVoiceByDefault preference
         if (!selectedVoiceId) {
-          setSelectedVoiceId(
-            profile?.voiceCloneId ?? options[0]?.id ?? 'EXAVITQu4vr4xnSDxMaL'
-          );
+          if (profile?.useMyVoiceByDefault && profile?.voiceCloneId) {
+            setSelectedVoiceId(profile.voiceCloneId);
+          } else {
+            setSelectedVoiceId(
+              profile?.voiceCloneId ?? options[0]?.id ?? 'EXAVITQu4vr4xnSDxMaL'
+            );
+          }
         }
       } catch (error) {
         console.error('[dashboard] Failed to load voices', error);
