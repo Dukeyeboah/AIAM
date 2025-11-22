@@ -60,6 +60,40 @@ export function MusicPlayer() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const currentSongIndexRef = useRef(0);
 
+  // Listen for background music events
+  useEffect(() => {
+    const handleStartMusic = () => {
+      if (songs.length > 0 && !isPlaying) {
+        setIsPlaying(true);
+        if (audioRef.current) {
+          audioRef.current.play().catch((error) => {
+            console.error(
+              '[MusicPlayer] Failed to start background music',
+              error
+            );
+          });
+        }
+      }
+    };
+
+    const handleStopMusic = () => {
+      if (isPlaying) {
+        setIsPlaying(false);
+        if (audioRef.current) {
+          audioRef.current.pause();
+        }
+      }
+    };
+
+    window.addEventListener('start-background-music', handleStartMusic);
+    window.addEventListener('stop-background-music', handleStopMusic);
+
+    return () => {
+      window.removeEventListener('start-background-music', handleStartMusic);
+      window.removeEventListener('stop-background-music', handleStopMusic);
+    };
+  }, [songs.length, isPlaying]);
+
   // Load songs from Firebase Storage
   useEffect(() => {
     const loadSongs = async () => {

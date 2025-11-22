@@ -125,17 +125,6 @@ export function UserMenu() {
         <DropdownMenuItem
           onSelect={(event) => {
             event.preventDefault();
-            router.push('/saved');
-            closeMenu();
-          }}
-          className='flex items-center gap-2 cursor-pointer'
-        >
-          <Bookmark className='h-4 w-4' />
-          Saved affirmations
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={(event) => {
-            event.preventDefault();
             router.push('/dashboard');
             closeMenu();
           }}
@@ -143,6 +132,17 @@ export function UserMenu() {
         >
           <LayoutDashboard className='h-4 w-4' />
           Dashboard
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={(event) => {
+            event.preventDefault();
+            router.push('/saved');
+            closeMenu();
+          }}
+          className='flex items-center gap-2 cursor-pointer'
+        >
+          <Bookmark className='h-4 w-4' />
+          Saved affirmations
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={(event) => {

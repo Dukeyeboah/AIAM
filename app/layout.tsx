@@ -13,12 +13,37 @@ const geist = Geist({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'aiam - Daily Affirmations for Your Soul',
   description:
-    'Generate personalized affirmations for every aspect of your life',
+    'Generate personalized affirmations for every aspect of your life. Use AI to create custom affirmations, visualize your future self, and hear them in your own voice.',
   generator: 'v0.app',
   icons: {
     icon: '/favicon.ico',
     apple: '/apple-icon.png',
   },
+  openGraph: {
+    title: 'aiam - Daily Affirmations for Your Soul',
+    description:
+      'Generate personalized affirmations for every aspect of your life. Use AI to create custom affirmations, visualize your future self, and hear them in your own voice.',
+    url: 'https://aiam.space',
+    siteName: 'aiam',
+    images: [
+      {
+        url: 'https://aiam.space/images/aiam_image.jpg',
+        width: 1200,
+        height: 630,
+        alt: 'aiam - Daily Affirmations for Your Soul',
+      },
+    ],
+    locale: 'en_US',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'aiam - Daily Affirmations for Your Soul',
+    description:
+      'Generate personalized affirmations for every aspect of your life. Use AI to create custom affirmations, visualize your future self, and hear them in your own voice.',
+    images: ['https://aiam.space/images/aiam_image.jpg'],
+  },
+  metadataBase: new URL('https://aiam.space'),
 };
 
 export default function RootLayout({
