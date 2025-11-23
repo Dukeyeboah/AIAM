@@ -47,7 +47,7 @@ export function WelcomeDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className='max-w-lg space-y-6'>
+      <DialogContent className='w-[90vw] max-w-[90vw] sm:max-w-lg sm:w-full space-y-6'>
         <DialogHeader>
           <DialogTitle className='text-2xl flex justify-center'>
             Welcome to aiam ✨

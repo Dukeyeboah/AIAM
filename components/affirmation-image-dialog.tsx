@@ -25,7 +25,7 @@ export function AffirmationImageDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className='max-w-5xl overflow-hidden border-none bg-transparent p-0 shadow-none'
+        className='w-[90vw] max-w-[90vw] sm:max-w-5xl sm:w-full overflow-hidden border-none bg-transparent p-0 shadow-none'
         showCloseButton={false}
       >
         <DialogTitle className='sr-only'>Affirmation image preview</DialogTitle>

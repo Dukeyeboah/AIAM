@@ -957,7 +957,7 @@ export function AffirmationModal({
         onOpenChange(newOpen);
       }}
     >
-      <DialogContent className='max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl'>
+      <DialogContent className='w-[90vw] max-w-[90vw] sm:max-w-2xl sm:w-full max-h-[90vh] overflow-y-auto rounded-2xl'>
         {/* {hasMultipleCategories && (
           <>
             <Button

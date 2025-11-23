@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     }
 
     const openai = getClient();
-    const shouldStartWithIAm = Math.random() < 0.69;
+    const shouldStartWithIAm = Math.random() < 0.9;
 
     const requirements = [
       `Create one powerful affirmation for the category "${category}".`,

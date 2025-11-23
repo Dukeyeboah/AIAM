@@ -1485,7 +1485,7 @@ export default function AccountPage() {
       </main>
 
       <Dialog open={creditsModalOpen} onOpenChange={setCreditsModalOpen}>
-        <DialogContent className='max-w-lg max-h-[80vh] overflow-y-auto'>
+        <DialogContent className='w-[90vw] max-w-[90vw] sm:max-w-lg sm:w-full max-h-[80vh] overflow-y-auto'>
           <DialogHeader>
             <DialogTitle>Select a credit pack</DialogTitle>
             <DialogDescription>

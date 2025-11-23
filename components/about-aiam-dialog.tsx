@@ -28,7 +28,7 @@ export function AboutAiamDialog({ open, onOpenChange }: AboutAiamDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-w-3xl max-h-[85vh] px-8'>
+      <DialogContent className='w-[90vw] max-w-[90vw] sm:max-w-3xl sm:w-full max-h-[85vh] px-8'>
         <DialogHeader>
           <DialogTitle className='text-2xl'>About aiam</DialogTitle>
           <DialogDescription className='text-base'>
