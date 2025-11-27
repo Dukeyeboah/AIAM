@@ -274,6 +274,23 @@ export function UserAffirmationCard({
     }
   }, [profile?.useMyVoiceByDefault, hasPersonalVoice, affirmation.useMyVoice]);
 
+  // Ensure selectedVoice defaults to cloned voice only if useMyVoiceByDefault is enabled
+  useEffect(() => {
+    if (
+      profile?.useMyVoiceByDefault &&
+      hasPersonalVoice &&
+      profile?.voiceCloneId &&
+      !selectedVoice
+    ) {
+      setSelectedVoice(profile.voiceCloneId);
+    }
+  }, [
+    profile?.useMyVoiceByDefault,
+    hasPersonalVoice,
+    profile?.voiceCloneId,
+    selectedVoice,
+  ]);
+
   useEffect(() => {
     let isCancelled = false;
     const fetchVoices = async () => {
@@ -292,7 +309,14 @@ export function UserAffirmationCard({
             description: voice.description ?? voice.labels?.description ?? '',
           })) ?? [];
         setVoices(options);
-        if (options.length > 0) {
+        // Set default voice: only use cloned voice if useMyVoiceByDefault is enabled AND voice exists
+        if (
+          profile?.useMyVoiceByDefault &&
+          hasPersonalVoice &&
+          profile?.voiceCloneId
+        ) {
+          setSelectedVoice(profile.voiceCloneId);
+        } else if (options.length > 0) {
           setSelectedVoice((current) => current || options[0].id);
         }
       } catch (error) {
@@ -888,7 +912,7 @@ export function UserAffirmationCard({
 
   return (
     <>
-      <Card className=' p-0 flex h-120 flex-col overflow-y-auto transition-shadow hover:shadow-lg'>
+      <Card className=' p-0 flex h-120 flex-col overflow-y-scroll overflow-x-hidden transition-shadow hover:shadow-lg'>
         {resolvedImageUrl ? (
           <div
             role='button'
@@ -983,7 +1007,12 @@ export function UserAffirmationCard({
           </CardHeader>
         )}
         <CardContent className='space-y-4 p-6 text-sm flex flex-col justify-center items-center'>
-          <div className='flex items-center justify-center gap-3 pt-0'>
+          {useMyVoice && hasPersonalVoice && (
+            <Badge className='bg-purple-500/80 text-white border-transparent text-xs px-2 py-0.5 w-full justify-center mb-1'>
+              Your Voice
+            </Badge>
+          )}
+          <div className='flex items-center justify-center gap-3 pt-0 flex-wrap'>
             <Button
               type='button'
               variant='secondary'
@@ -999,11 +1028,6 @@ export function UserAffirmationCard({
                 <ImageIcon className='h-4 w-4' />
               )}
             </Button>
-            {useMyVoice && hasPersonalVoice && (
-              <Badge className='bg-purple-500/80 text-white border-transparent text-xs px-2 py-0.5'>
-                Your Voice
-              </Badge>
-            )}
             <DropdownMenu>
               <DropdownMenuTrigger
                 asChild

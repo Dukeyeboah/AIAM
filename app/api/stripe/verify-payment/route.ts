@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { admin, adminDb } from '@/lib/firebase/admin';
+import { sendPurchaseConfirmationEmail } from '@/lib/email';
 
 const PACK_CREDITS: Record<string, number> = {
   starter: 500,
@@ -175,6 +176,15 @@ export async function POST(req: Request) {
     });
 
     console.log('[stripe-verify-payment] Purchase recorded successfully');
+
+    // Send purchase confirmation email (non-blocking)
+    sendPurchaseConfirmationEmail(userId, packId).catch((emailError) => {
+      console.warn(
+        '[stripe-verify-payment] Email sending error (non-critical):',
+        emailError
+      );
+      // Don't fail the verification if email fails
+    });
 
     return NextResponse.json({
       success: true,

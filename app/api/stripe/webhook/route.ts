@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { admin, adminDb } from '@/lib/firebase/admin';
+import { sendPurchaseConfirmationEmail } from '@/lib/email';
 import type Stripe from 'stripe';
 
 const PACK_CREDITS: Record<string, number> = {
@@ -130,6 +131,15 @@ export async function POST(req: Request) {
         });
 
       console.log('[stripe-webhook] Purchase recorded successfully');
+
+      // Send purchase confirmation email (non-blocking)
+      sendPurchaseConfirmationEmail(userId, packId).catch((emailError) => {
+        console.warn(
+          '[stripe-webhook] Email sending error (non-critical):',
+          emailError
+        );
+        // Don't fail the webhook if email fails
+      });
     } catch (err) {
       console.error('[stripe-webhook] Failed to credit user', err);
       // Don't return error - Stripe will retry if we return an error

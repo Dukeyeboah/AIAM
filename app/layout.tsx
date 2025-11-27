@@ -11,7 +11,7 @@ import { AppShell } from '@/components/app-shell';
 const geist = Geist({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'aiam - Affirmations for Your Self Actualization',
+  title: 'aiam - Personalized affirmations for Your Self lization',
   description:
     'Generate personalized affirmations for every aspect of your life. Use AI to create custom affirmations, visualize your future self, and hear them in your own voice.',
   generator: 'v0.app',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     apple: '/apple-icon.png',
   },
   openGraph: {
-    title: 'aiam - Affirmations for Your Self Actualization',
+    title: 'aiam - Personalized affirmations for Your Self Actualization',
     description:
       'Generate personalized affirmations for every aspect of your life. Use AI to create custom affirmations, visualize your future self, and hear them in your own voice.',
     url: 'https://aiam.space',
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
         url: 'https://aiam.space/images/aiam_image.jpg',
         width: 1200,
         height: 630,
-        alt: 'aiam - Affirmations for Your Self Actualization',
+        alt: 'aiam - Personalized affirmations for Your Self Actualization',
       },
     ],
     locale: 'en_US',
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'aiam - Affirmations for Your Self Actualization',
+    title: 'aiam - Personalized affirmations for Your Self Actualization',
     description:
       'Generate personalized affirmations for every aspect of your life. Use AI to create custom affirmations, visualize your future self, and hear them in your own voice.',
     images: ['https://aiam.space/images/aiam_image.jpg'],

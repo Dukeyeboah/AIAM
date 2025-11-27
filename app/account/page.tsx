@@ -132,6 +132,7 @@ export default function AccountPage() {
   const [voiceCloneName, setVoiceCloneName] = useState<string | null>(null);
   const [uploadingVoice, setUploadingVoice] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [initializingRecording, setInitializingRecording] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const [voicePreviewUrl, setVoicePreviewUrl] = useState<string | null>(null);
   const recordedChunksRef = useRef<BlobPart[]>([]);
@@ -661,6 +662,7 @@ export default function AccountPage() {
   };
 
   const startRecording = async () => {
+    setInitializingRecording(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       recordedChunksRef.current = [];
@@ -681,12 +683,15 @@ export default function AccountPage() {
           if (prev) URL.revokeObjectURL(prev);
           return URL.createObjectURL(blob);
         });
+        setHasNewVoiceFile(true);
       };
       recorder.start();
       recorderRef.current = recorder;
       setRecording(true);
+      setInitializingRecording(false);
     } catch (error) {
       console.error('[AccountPage] Unable to access microphone', error);
+      setInitializingRecording(false);
       toast({
         title: 'Microphone access denied',
         description:
@@ -1342,13 +1347,24 @@ export default function AccountPage() {
                   variant={recording ? 'destructive' : 'secondary'}
                   className='flex items-center gap-2'
                   onClick={recording ? stopRecording : startRecording}
+                  disabled={initializingRecording}
                 >
-                  {recording ? (
-                    <StopCircle className='h-4 w-4' />
+                  {initializingRecording ? (
+                    <>
+                      <Loader2 className='h-4 w-4 animate-spin' />
+                      Preparing microphone...
+                    </>
+                  ) : recording ? (
+                    <>
+                      <StopCircle className='h-4 w-4' />
+                      Stop recording
+                    </>
                   ) : (
-                    <Mic className='h-4 w-4' />
+                    <>
+                      <Mic className='h-4 w-4' />
+                      Record voice sample
+                    </>
                   )}
-                  {recording ? 'Stop recording' : 'Record voice sample'}
                 </Button>
                 <Button
                   variant='outline'

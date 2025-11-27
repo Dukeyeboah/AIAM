@@ -181,14 +181,15 @@ export default function SavedPage() {
         }
 
         setVoices(options);
-        // Set default based on useMyVoiceByDefault preference
+        // Set default: only use cloned voice if useMyVoiceByDefault is enabled AND voice exists
         if (!selectedVoiceId) {
           if (profile?.useMyVoiceByDefault && profile?.voiceCloneId) {
+            // Only default to cloned voice if user has enabled "use my voice by default"
             setSelectedVoiceId(profile.voiceCloneId);
+          } else if (options.length > 0) {
+            setSelectedVoiceId(options[0].id);
           } else {
-            setSelectedVoiceId(
-              profile?.voiceCloneId ?? options[0]?.id ?? 'EXAVITQu4vr4xnSDxMaL'
-            );
+            setSelectedVoiceId('EXAVITQu4vr4xnSDxMaL');
           }
         }
       } catch (error) {

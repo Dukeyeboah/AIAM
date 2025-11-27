@@ -60,6 +60,7 @@
     "react-resizable-panels": "^2.1.7",
     "recharts": "2.15.4",
     "replicate": "^0.32.1",
+    "resend": "^6.5.2",
     "sonner": "^1.7.4",
     "stripe": "^19.3.1",
     "tailwind-merge": "^2.5.5",
