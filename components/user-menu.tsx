@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   Info,
   Home,
+  Mail,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -25,6 +26,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/providers/auth-provider';
 import { AboutAiamDialog } from '@/components/about-aiam-dialog';
+import { ContactUsDialog } from '@/components/contact-us-dialog';
 
 export function UserMenu() {
   const { profile, signOutUser, authLoading } = useAuth();
@@ -32,6 +34,7 @@ export function UserMenu() {
   const [signingOut, setSigningOut] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
 
   const initials = useMemo(() => {
     const fromDisplayName = profile?.displayName
@@ -166,6 +169,17 @@ export function UserMenu() {
           <Info className='h-4 w-4' />
           About aiam
         </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={(event) => {
+            event.preventDefault();
+            setContactOpen(true);
+            closeMenu();
+          }}
+          className='flex items-center gap-2 cursor-pointer'
+        >
+          <Mail className='h-4 w-4' />
+          Contact us
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={(event) => {
@@ -185,6 +199,7 @@ export function UserMenu() {
         </DropdownMenuItem>
       </DropdownMenuContent>
       <AboutAiamDialog open={aboutOpen} onOpenChange={setAboutOpen} />
+      <ContactUsDialog open={contactOpen} onOpenChange={setContactOpen} />
     </DropdownMenu>
   );
 }
