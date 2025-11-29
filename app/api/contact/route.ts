@@ -2,7 +2,13 @@ import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { admin, adminDb } from '@/lib/firebase/admin';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazy initialization of Resend to avoid build-time errors
+function getResend(): Resend | null {
+  if (!process.env.RESEND_API_KEY) {
+    return null;
+  }
+  return new Resend(process.env.RESEND_API_KEY);
+}
 
 // Your email address where contact messages should be sent
 const CONTACT_EMAIL = process.env.CONTACT_EMAIL || 'dkyeboah1@gmail.com';
@@ -44,6 +50,14 @@ export async function POST(req: Request) {
     }
 
     // Send email notification
+    const resend = getResend();
+    if (!resend) {
+      return NextResponse.json(
+        { error: 'Email service not configured' },
+        { status: 500 }
+      );
+    }
+
     const { data, error } = await resend.emails.send({
       from: 'aiam Contact <noreply@reminder.aiam.space>',
       to: CONTACT_EMAIL,

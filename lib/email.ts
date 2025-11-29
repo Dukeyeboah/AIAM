@@ -1,7 +1,18 @@
 import { Resend } from 'resend';
 import { adminDb } from '@/lib/firebase/admin';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazy initialization of Resend to avoid build-time errors
+let resendInstance: Resend | null = null;
+
+function getResend(): Resend | null {
+  if (!process.env.RESEND_API_KEY) {
+    return null;
+  }
+  if (!resendInstance) {
+    resendInstance = new Resend(process.env.RESEND_API_KEY);
+  }
+  return resendInstance;
+}
 
 const PACK_INFO: Record<
   string,
@@ -54,6 +65,11 @@ export async function sendPurchaseConfirmationEmail(
     }
 
     // Send email
+    const resend = getResend();
+    if (!resend) {
+      return { success: false, error: 'Email service not configured' };
+    }
+
     const { data, error } = await resend.emails.send({
       from: 'aiam <noreply@reminder.aiam.space>',
       to: userEmail,
@@ -194,6 +210,11 @@ export async function sendMondayMotivationalEmail(
       })
       .join('');
 
+    const resend = getResend();
+    if (!resend) {
+      return { success: false, error: 'Email service not configured' };
+    }
+
     const { data, error } = await resend.emails.send({
       from: 'aiam <noreply@reminder.aiam.space>',
       to: userEmail,
@@ -329,6 +350,11 @@ export async function sendWeeklySummaryEmail(
         `;
       })
       .join('');
+
+    const resend = getResend();
+    if (!resend) {
+      return { success: false, error: 'Email service not configured' };
+    }
 
     const { data, error } = await resend.emails.send({
       from: 'aiam <noreply@reminder.aiam.space>',
