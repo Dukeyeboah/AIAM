@@ -107,7 +107,7 @@ export function UserAffirmationCard({
   const favoriteDocRef = useRef<ReturnType<typeof doc> | null>(null);
 
   const hasPersonalImages = useMemo(
-    () => Boolean(profile?.portraitImageUrl && profile?.fullBodyImageUrl),
+    () => Boolean(profile?.portraitImageUrl || profile?.fullBodyImageUrl),
     [profile?.portraitImageUrl, profile?.fullBodyImageUrl]
   );
   const hasPersonalVoice = useMemo(
@@ -602,25 +602,38 @@ export function UserAffirmationCard({
 
     setGenerating(true);
     try {
+      const requestBody = {
+        affirmation: affirmation.affirmation,
+        category: affirmation.categoryTitle,
+        categoryId: affirmation.categoryId,
+        useUserImages: useMyImage && hasPersonalImages,
+        userImages:
+          useMyImage && hasPersonalImages
+            ? {
+                portrait: profile?.portraitImageUrl,
+                fullBody: profile?.fullBodyImageUrl,
+              }
+            : undefined,
+        aspectRatio: profile?.defaultAspectRatio ?? '1:1',
+        demographics:
+          !useMyImage || !hasPersonalImages ? demographicContext : undefined,
+      };
+
+      // Log what we're sending (for debugging)
+      console.log('[UserAffirmationCard] Generating image with:', {
+        useUserImages: requestBody.useUserImages,
+        hasPortrait: !!requestBody.userImages?.portrait,
+        hasFullBody: !!requestBody.userImages?.fullBody,
+        portraitUrl: requestBody.userImages?.portrait ? 'present' : 'missing',
+        fullBodyUrl: requestBody.userImages?.fullBody ? 'present' : 'missing',
+        category: requestBody.category,
+        aspectRatio: requestBody.aspectRatio,
+      });
+
       const response = await fetch('/api/predictions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          affirmation: affirmation.affirmation,
-          category: affirmation.categoryTitle,
-          categoryId: affirmation.categoryId,
-          useUserImages: useMyImage && hasPersonalImages,
-          userImages:
-            useMyImage && hasPersonalImages
-              ? {
-                  portrait: profile?.portraitImageUrl,
-                  fullBody: profile?.fullBodyImageUrl,
-                }
-              : undefined,
-          aspectRatio: profile?.defaultAspectRatio ?? '1:1',
-          demographics:
-            !useMyImage || !hasPersonalImages ? demographicContext : undefined,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
@@ -1008,7 +1021,7 @@ export function UserAffirmationCard({
         )}
         <CardContent className='space-y-4 p-6 text-sm flex flex-col justify-center items-center'>
           {useMyVoice && hasPersonalVoice && (
-            <Badge className='bg-purple-500/80 text-white border-transparent text-xs px-2 py-0.5 w-full justify-center mb-1'>
+            <Badge className='bg-purple-500/80 text-white border-transparent text-xs px-2 py-0.5 justify-center mb-1'>
               Your Voice
             </Badge>
           )}

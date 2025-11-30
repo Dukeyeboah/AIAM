@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Image from 'next/image';
+import NextImage from 'next/image';
 import {
   Play,
   Square,
@@ -11,9 +11,12 @@ import {
   Loader2,
   Mic,
   Check,
+  Download,
+  MoreVertical,
+  Music,
 } from 'lucide-react';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { getDownloadURL, ref, uploadBytes, listAll } from 'firebase/storage';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -29,6 +32,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { VOICE_CLONE_COST, hasEnoughCredits } from '@/lib/credit-utils';
 
 export default function PlaylistViewPage() {
@@ -47,6 +59,10 @@ export default function PlaylistViewPage() {
   >([]);
   const [loadingVoices, setLoadingVoices] = useState(false);
   const [isFetchingAudio, setIsFetchingAudio] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
+  const [withMusic, setWithMusic] = useState(false);
+  const [mixedAudioUrl, setMixedAudioUrl] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { affirmations } = useUserAffirmations();
 
@@ -117,9 +133,26 @@ export default function PlaylistViewPage() {
             name: voice.name,
             description: voice.description ?? voice.labels?.description ?? '',
           })) ?? [];
+
+        // Add cloned voice option if available
+        if (profile?.voiceCloneId) {
+          options.unshift({
+            id: profile.voiceCloneId,
+            name: profile.voiceCloneName ?? 'Your Voice',
+            description: 'Your personal cloned voice',
+          });
+        }
+
         setVoices(options);
         if (options.length > 0) {
-          setSelectedVoice(profile?.voiceCloneId ?? options[0].id);
+          // Set default voice: prefer cloned voice if useMyVoiceByDefault is enabled, otherwise use cloned voice if available, else first AI voice
+          if (profile?.useMyVoiceByDefault && profile?.voiceCloneId) {
+            setSelectedVoice(profile.voiceCloneId);
+          } else if (profile?.voiceCloneId) {
+            setSelectedVoice(profile.voiceCloneId);
+          } else {
+            setSelectedVoice(options[0].id);
+          }
         }
       } catch (error) {
         console.error('[playlist-view] Failed to load voices', error);
@@ -129,7 +162,11 @@ export default function PlaylistViewPage() {
     };
 
     void fetchVoices();
-  }, [profile?.voiceCloneId]);
+  }, [
+    profile?.voiceCloneId,
+    profile?.voiceCloneName,
+    profile?.useMyVoiceByDefault,
+  ]);
 
   useEffect(() => {
     if (!currentAffirmation?.imageUrl) {
@@ -169,10 +206,14 @@ export default function PlaylistViewPage() {
     }
   };
 
-  const playCurrent = async () => {
-    if (!currentAffirmation || !selectedVoice) return;
+  const playCurrent = async (affirmationIndex?: number) => {
+    // Use provided index or current index
+    const index =
+      affirmationIndex !== undefined ? affirmationIndex : currentIndex;
+    const affirmation = playlistAffirmations[index];
 
-    const affirmation = currentAffirmation;
+    if (!affirmation || !selectedVoice) return;
+
     let audioUrl = affirmation?.audioUrls?.[selectedVoice];
 
     const usingVoiceClone = !!(
@@ -303,18 +344,31 @@ export default function PlaylistViewPage() {
     }
 
     setIsPlaying(true);
+
+    // Start background music if enabled
+    if (withMusic) {
+      window.dispatchEvent(new CustomEvent('start-background-music'));
+    }
+
     const stopAudio = () => {
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
         audioRef.current = null;
       }
+      // Stop background music if it was playing
+      if (withMusic) {
+        window.dispatchEvent(new CustomEvent('stop-background-music'));
+        // Mix and cache audio with music after playback completes
+        void mixAndCachePlaylistAudioWithMusic();
+      }
     };
 
     try {
+      // Play affirmations sequentially
       for (let i = currentIndex; i < playlistAffirmations.length; i++) {
         setCurrentIndex(i);
-        await playCurrent();
+        await playCurrent(i);
         // Small delay between affirmations
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
@@ -339,6 +393,197 @@ export default function PlaylistViewPage() {
     }
   };
 
+  // Check for existing mixed audio on mount and when voice changes
+  useEffect(() => {
+    const checkMixedAudio = async () => {
+      if (!user || !playlist || !selectedVoice) {
+        setMixedAudioUrl(null);
+        return;
+      }
+
+      try {
+        const mixedAudioRef = ref(
+          firebaseStorage,
+          `users/${user.uid}/playlists/${playlist.id}/audio/${selectedVoice}_with_music.mp3`
+        );
+        const url = await getDownloadURL(mixedAudioRef).catch(() => null);
+        setMixedAudioUrl(url);
+      } catch (error) {
+        setMixedAudioUrl(null);
+      }
+    };
+
+    void checkMixedAudio();
+  }, [user, playlist, selectedVoice]);
+
+  // Mix playlist audio with background music and cache it
+  const mixAndCachePlaylistAudioWithMusic = async () => {
+    if (!user || !playlist || !selectedVoice) return;
+
+    try {
+      // Get all audio URLs for affirmations
+      const audioUrls: string[] = [];
+      for (const aff of playlistAffirmations) {
+        const audioUrl = aff.audioUrls?.[selectedVoice];
+        if (!audioUrl) {
+          throw new Error('Not all affirmations have cached audio');
+        }
+        audioUrls.push(audioUrl);
+      }
+
+      // Get music URL from music player (we'll need to get it from storage)
+      const musicRef = ref(firebaseStorage, 'music');
+      const { listAll } = await import('firebase/storage');
+      const files = await listAll(musicRef);
+      if (files.items.length === 0) {
+        throw new Error('No music available');
+      }
+      const musicUrl = await getDownloadURL(files.items[0]);
+
+      // Initialize Web Audio API
+      const audioContext = new (window.AudioContext ||
+        (window as any).webkitAudioContext)();
+
+      // Load and decode all affirmation audio files
+      const affirmationBuffers = await Promise.all(
+        audioUrls.map(async (url) => {
+          const response = await fetch(url);
+          const arrayBuffer = await response.arrayBuffer();
+          return await audioContext.decodeAudioData(arrayBuffer);
+        })
+      );
+
+      // Load and decode music file
+      const musicResponse = await fetch(musicUrl);
+      const musicArrayBuffer = await musicResponse.arrayBuffer();
+      const musicBuffer = await audioContext.decodeAudioData(musicArrayBuffer);
+
+      // Calculate total duration (sum of all affirmation durations + gaps)
+      const gapDuration = 0.5;
+      const totalDuration =
+        affirmationBuffers.reduce((sum, buf) => sum + buf.duration, 0) +
+        gapDuration * (affirmationBuffers.length - 1);
+
+      // Create output buffer
+      const sampleRate = audioContext.sampleRate;
+      const outputBuffer = audioContext.createBuffer(
+        2, // Stereo
+        Math.ceil(totalDuration * sampleRate),
+        sampleRate
+      );
+
+      // Mix all affirmations sequentially with gaps
+      let currentOffset = 0;
+      for (let i = 0; i < affirmationBuffers.length; i++) {
+        const affBuffer = affirmationBuffers[i];
+        const affData = affBuffer.getChannelData(0);
+        const affData1 =
+          affBuffer.numberOfChannels > 1
+            ? affBuffer.getChannelData(1)
+            : affData;
+        const outputData0 = outputBuffer.getChannelData(0);
+        const outputData1 = outputBuffer.getChannelData(1);
+
+        // Copy affirmation audio to output buffer
+        for (let j = 0; j < affData.length; j++) {
+          if (currentOffset + j < outputData0.length) {
+            outputData0[currentOffset + j] += affData[j];
+            outputData1[currentOffset + j] += affData1[j];
+          }
+        }
+        currentOffset += affData.length;
+
+        // Add gap between affirmations
+        const gapSamples = Math.floor(gapDuration * sampleRate);
+        currentOffset += gapSamples;
+      }
+
+      // Mix music at 20% volume, looping to match total duration
+      const musicData = musicBuffer.getChannelData(0);
+      const musicData1 =
+        musicBuffer.numberOfChannels > 1
+          ? musicBuffer.getChannelData(1)
+          : musicData;
+      const outputData0 = outputBuffer.getChannelData(0);
+      const outputData1 = outputBuffer.getChannelData(1);
+      const musicGain = 0.2; // 20% volume
+
+      for (let i = 0; i < outputBuffer.length; i++) {
+        const musicIndex = i % musicData.length;
+        outputData0[i] += musicData[musicIndex] * musicGain;
+        outputData1[i] += musicData1[musicIndex] * musicGain;
+      }
+
+      // Convert buffer to WAV blob
+      const wav = audioBufferToWav(outputBuffer);
+      const blob = new Blob([wav], { type: 'audio/wav' });
+
+      // Upload to Firebase Storage
+      const audioPath = `users/${user.uid}/playlists/${playlist.id}/audio/${selectedVoice}_with_music.mp3`;
+      const storageRef = ref(firebaseStorage, audioPath);
+      await uploadBytes(storageRef, blob, { contentType: 'audio/mpeg' });
+      const downloadUrl = await getDownloadURL(storageRef);
+
+      setMixedAudioUrl(downloadUrl);
+
+      toast({
+        title: 'Mixed audio saved',
+        description:
+          'Your playlist audio with music has been saved and is ready to download.',
+      });
+    } catch (error) {
+      console.error('[playlist-view] Failed to mix audio with music:', error);
+      throw error;
+    }
+  };
+
+  // Helper function to convert AudioBuffer to WAV
+  const audioBufferToWav = (buffer: AudioBuffer): ArrayBuffer => {
+    const length = buffer.length;
+    const numberOfChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const arrayBuffer = new ArrayBuffer(44 + length * numberOfChannels * 2);
+    const view = new DataView(arrayBuffer);
+
+    const writeString = (offset: number, string: string) => {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    };
+
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + length * numberOfChannels * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, numberOfChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * numberOfChannels * 2, true);
+    view.setUint16(32, numberOfChannels * 2, true);
+    view.setUint16(34, 16, true);
+    writeString(36, 'data');
+    view.setUint32(40, length * numberOfChannels * 2, true);
+
+    let offset = 44;
+    for (let i = 0; i < length; i++) {
+      for (let channel = 0; channel < numberOfChannels; channel++) {
+        const sample = Math.max(
+          -1,
+          Math.min(1, buffer.getChannelData(channel)[i])
+        );
+        view.setInt16(
+          offset,
+          sample < 0 ? sample * 0x8000 : sample * 0x7fff,
+          true
+        );
+        offset += 2;
+      }
+    }
+
+    return arrayBuffer;
+  };
+
   const handlePlayPause = () => {
     if (isPlaying) {
       if (audioRef.current) {
@@ -348,6 +593,142 @@ export default function PlaylistViewPage() {
       setIsPlaying(false);
     } else {
       void playSequentially();
+    }
+  };
+
+  // Check if all affirmations have cached audio for selected voice
+  const checkAllAudioReady = (): boolean => {
+    if (!selectedVoice || playlistAffirmations.length === 0) return false;
+    return playlistAffirmations.every((aff) => {
+      const audioUrls = aff.audioUrls || {};
+      return !!audioUrls[selectedVoice];
+    });
+  };
+
+  const handleDownloadClick = (withMusicDownload: boolean = false) => {
+    if (!selectedVoice) {
+      toast({
+        title: 'Select a voice',
+        description: 'Please select a voice before downloading.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // If downloading with music, check if mixed audio exists
+    if (withMusicDownload) {
+      if (mixedAudioUrl) {
+        // Download the cached mixed audio
+        const a = document.createElement('a');
+        a.href = mixedAudioUrl;
+        a.download = `${playlist?.name.replace(
+          /[^a-z0-9]/gi,
+          '_'
+        )}_${selectedVoice}_with_music.mp3`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        toast({
+          title: 'Download complete',
+          description: 'Your playlist audio with music has been downloaded.',
+        });
+        return;
+      } else {
+        toast({
+          title: 'No mixed audio available',
+          description:
+            'Please play all affirmations with music first to generate the mixed audio.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
+    const isReady = checkAllAudioReady();
+    if (!isReady) {
+      setDownloadDialogOpen(true);
+      return;
+    }
+
+    void handleDownload();
+  };
+
+  const handleDownload = async () => {
+    if (!user || !playlist || !selectedVoice) return;
+
+    setDownloading(true);
+
+    // Show loading toast
+    const loadingToast = toast({
+      title: 'Preparing download...',
+      description: 'Combining audio files. This may take a moment.',
+    });
+
+    try {
+      const response = await fetch('/api/playlist/download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.uid,
+          playlistId: playlist.id,
+          voiceId: selectedVoice,
+          withMusic: false,
+          withImages: false,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        if (data.error === 'Not all affirmations have cached audio') {
+          setDownloadDialogOpen(true);
+          return;
+        }
+        throw new Error(data.error || 'Failed to download playlist');
+      }
+
+      // Get filename from response headers or use default
+      const contentDisposition = response.headers.get('Content-Disposition');
+      const contentType = response.headers.get('Content-Type');
+      const isVideo = contentType?.includes('video');
+      const extension = isVideo ? '.mp4' : '.mp3';
+      let fileName = `${playlist.name.replace(
+        /[^a-z0-9]/gi,
+        '_'
+      )}_${selectedVoice}${extension}`;
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="?(.+?)"?$/i);
+        if (match) {
+          fileName = decodeURIComponent(match[1]);
+        }
+      }
+
+      // Create blob from response
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: 'Download complete',
+        description: 'Your playlist audio has been downloaded.',
+      });
+    } catch (error) {
+      console.error('[playlist-view] Download failed', error);
+      toast({
+        title: 'Download failed',
+        description:
+          error instanceof Error
+            ? error.message
+            : 'Unable to download the playlist. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -397,7 +778,7 @@ export default function PlaylistViewPage() {
   return (
     <main className='container mx-auto max-w-4xl px-6 py-4 space-y-2'>
       <div className='flex items-center justify-between'>
-        <div>
+        <div className='flex-1'>
           <Button
             variant='ghost'
             onClick={() => router.push('/playlists')}
@@ -413,12 +794,62 @@ export default function PlaylistViewPage() {
             of {playlistAffirmations.length}
           </p>
         </div>
+        <div className='flex items-center gap-2'>
+          <Switch
+            id='with-music-playlist'
+            checked={withMusic}
+            onCheckedChange={setWithMusic}
+            disabled={isPlaying}
+            title={
+              isPlaying
+                ? 'Use the music player in the header to add background music'
+                : 'Play background music during playback'
+            }
+          />
+          <Label
+            htmlFor='with-music-playlist'
+            className='flex items-center gap-1 cursor-pointer'
+            title={
+              isPlaying
+                ? 'Use the music player in the header to add background music'
+                : 'Play background music during playback'
+            }
+          >
+            <Music className='h-4 w-4 text-muted-foreground' />
+            <span className='text-sm'>With music</span>
+          </Label>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant='ghost' size='icon' className='h-8 w-8'>
+                <MoreVertical className='h-4 w-4' />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align='end'>
+              <DropdownMenuItem
+                onClick={() => handleDownloadClick(false)}
+                disabled={downloading || !selectedVoice}
+              >
+                <Download className='mr-2 h-4 w-4' />
+                {downloading ? 'Downloading...' : 'Download playlist audio'}
+              </DropdownMenuItem>
+              {mixedAudioUrl && (
+                <DropdownMenuItem
+                  onClick={() => handleDownloadClick(true)}
+                  disabled={downloading || !selectedVoice}
+                >
+                  <Music className='mr-2 h-4 w-4' />
+                  {downloading ? 'Downloading...' : 'Download with music'}
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       <Card className='relative p-0 overflow-hidden'>
         {resolvedImageUrl ? (
           <div className='relative h-[600px] w-full'>
-            <Image
+            <NextImage
               src={resolvedImageUrl}
               alt='Affirmation visualization'
               fill
@@ -546,6 +977,36 @@ export default function PlaylistViewPage() {
       </Card>
 
       {/* Remove bottom voice select per request; voice selection is now via the mic icon in the overlay */}
+
+      {/* Download Dialog - shows when audio not ready */}
+      <Dialog open={downloadDialogOpen} onOpenChange={setDownloadDialogOpen}>
+        <DialogContent className='w-[90vw] max-w-[90vw] sm:max-w-md sm:w-full'>
+          <DialogHeader>
+            <DialogTitle>Play All First</DialogTitle>
+            <DialogDescription>
+              To download the playlist audio, you need to play all affirmations
+              in the playlist first. This ensures all audio files are cached and
+              ready for download.
+            </DialogDescription>
+          </DialogHeader>
+          <div className='flex justify-end gap-3 pt-4'>
+            <Button
+              variant='outline'
+              onClick={() => setDownloadDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                setDownloadDialogOpen(false);
+                void playSequentially();
+              }}
+            >
+              Play All Now
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

@@ -43,12 +43,32 @@ export async function POST(request: Request) {
           nationality?: string;
         }
       | undefined = body?.demographics;
-    const imageInputs =
-      useUserImages && userImages
-        ? [userImages.portrait, userImages.fullBody].filter(
-            (url): url is string => Boolean(url && typeof url === 'string')
-          )
-        : [];
+    // Process image URLs - ensure they're valid and accessible
+    let processedImageInputs: string[] = [];
+    if (useUserImages && userImages) {
+      const urls: string[] = [];
+      if (userImages.portrait && typeof userImages.portrait === 'string') {
+        urls.push(userImages.portrait);
+      }
+      if (userImages.fullBody && typeof userImages.fullBody === 'string') {
+        urls.push(userImages.fullBody);
+      }
+
+      // If URLs are Firebase Storage gs:// URLs, we need to convert them
+      // For now, we'll use them as-is since getDownloadURL should provide https URLs
+      processedImageInputs = urls.filter((url) => {
+        // Validate URL format
+        try {
+          new URL(url);
+          return true;
+        } catch {
+          console.warn('[api/predictions] Invalid image URL format:', url);
+          return false;
+        }
+      });
+    }
+
+    const imageInputs = processedImageInputs;
 
     if (!affirmation) {
       return NextResponse.json(
@@ -58,10 +78,78 @@ export async function POST(request: Request) {
     }
 
     const openai = getOpenAI();
-    const additionalContext =
-      useUserImages && userImages?.portrait && userImages?.fullBody
-        ? `\nUse the following user reference photos to capture their exact likeness: \nPortrait reference: ${userImages.portrait}\nFull-body reference: ${userImages.fullBody}. Describe the subject with identical facial features, skin tone, hair color, hairstyle, hair texture, body proportions, and posture. Preserve all distinctive physical characteristics including hair length, style, and any unique features.`
-        : '';
+    // Check if we have at least one reference image
+    const hasReferenceImages = useUserImages && imageInputs.length > 0;
+
+    // Build context based on which images are available
+    let imageReferenceText = '';
+    if (userImages?.portrait && userImages?.fullBody) {
+      imageReferenceText = `PORTRAIT/CLOSE-UP REFERENCE (use for FACE): ${userImages.portrait}
+FULL-BODY REFERENCE (use for BODY SHAPE, BUILD, PROPORTIONS): ${userImages.fullBody}
+
+CRITICAL: Use the PORTRAIT/CLOSE-UP image to match the FACE, FACIAL FEATURES, and HEAD. Use the FULL-BODY image to match BODY SHAPE, BUILD, HEIGHT, and PROPORTIONS.`;
+    } else if (userImages?.portrait) {
+      imageReferenceText = `PORTRAIT/CLOSE-UP REFERENCE (use for FACE and HEAD): ${userImages.portrait}`;
+    } else if (userImages?.fullBody) {
+      imageReferenceText = `FULL-BODY REFERENCE (use for FACE, BODY SHAPE, BUILD, and PROPORTIONS): ${userImages.fullBody}`;
+    }
+
+    const additionalContext = hasReferenceImages
+      ? `\n\n=== CRITICAL INSTRUCTION: USER REFERENCE PHOTOS PROVIDED ===
+The user has provided personal reference photos that MUST be used to generate an image with their EXACT likeness. The generated image MUST show the SAME PERSON from the reference photos with photorealistic precision.
+
+${imageReferenceText}
+
+MANDATORY REQUIREMENTS FOR EXACT LIKENESS:
+
+1. FACIAL FEATURES - Match EXACTLY from the PORTRAIT/CLOSE-UP reference (or full-body if portrait not available):
+   - Use the PORTRAIT/CLOSE-UP image as the PRIMARY source for ALL facial features
+   - Eye shape, eye color, eye spacing, eyelid shape - EXACT match
+   - Nose shape, size, width, bridge height, nostril shape - EXACT match
+   - Mouth shape, lip size, lip color, cupid's bow - EXACT match
+   - Jawline, chin shape, cheekbone structure - EXACT match
+   - Facial bone structure, face shape (oval, round, square, etc.) - EXACT match
+   - Eyebrow shape, thickness, arch, color - EXACT match
+   - The face MUST be immediately recognizable as the same person from the portrait/close-up photo
+
+2. SKIN TONE & TEXTURE - Match PRECISELY from reference photos:
+   - Exact skin color, undertones (warm, cool, neutral) - must match reference
+   - Skin texture, smoothness, any visible pores - must match reference
+   - Any distinctive skin features (freckles, moles, birthmarks) - must match reference exactly
+
+3. HAIR - Match EXACTLY from the PORTRAIT/CLOSE-UP reference:
+   - Hair color (exact shade, highlights, lowlights) - EXACT match
+   - Hair texture (straight, wavy, curly, coily) - EXACT match
+   - Hair length, style, density, volume - EXACT match
+   - Hairline shape, part location - EXACT match
+   - Any distinctive hair characteristics - EXACT match
+
+4. BODY PROPORTIONS - Match EXACTLY from the FULL-BODY reference (if provided):
+   - If full-body reference is provided, use it for: height, build, body frame, shoulder width, waist size, hip width, posture, stance, body shape, muscle definition, body type
+   - If only portrait is provided, maintain realistic body proportions that match the person's apparent build from the portrait
+
+5. DISTINCTIVE FEATURES - Preserve ALL from reference photos:
+   - Birthmarks, freckles, moles, scars - must match reference exactly
+   - Unique facial characteristics - must match reference exactly
+   - Any distinguishing features that make this person recognizable - must match reference exactly
+
+CRITICAL RULES:
+- The PORTRAIT/CLOSE-UP image is the PRIMARY source for facial features, skin tone, and hair
+- The FULL-BODY image is the PRIMARY source for body shape, build, height, and proportions
+- The face in the generated image MUST look EXACTLY like the face in the portrait/close-up reference photo
+- The body proportions MUST match the full-body reference photo (if provided)
+- The clothing, setting, background, and pose can change to fit the affirmation category and context
+- But the person's physical appearance, face, skin tone, hair, and body proportions MUST be PHOTOREALISTIC and IDENTICAL to the reference photos
+- The person must be immediately recognizable as the same person from the reference photos
+
+ADDITIONAL CHARACTERS (if any appear in the scene):
+- If other people or characters appear in the generated image, make them of similar ethnicity, race, and cultural background to the main person (the user) for relatability and representation
+- Other characters should share similar skin tone, facial features, and cultural characteristics when appropriate
+- However, diversity is welcome - occasionally include characters of different backgrounds when it makes sense for the scene context
+- The main person (the user) must always remain the primary focus and be clearly identifiable
+
+Generate ultra-high quality, photorealistic images that look like professional photography. The person must be immediately recognizable as the same person from the reference photos.`
+      : '';
     const demographicContext =
       !useUserImages && demographics
         ? (() => {
@@ -88,8 +176,9 @@ export async function POST(request: Request) {
       messages: [
         {
           role: 'system',
-          content:
-            'You translate affirmations into evocative visual art prompts for text-to-image models. Focus on mood, lighting, and key elements that visually aptly convey the message of the affirmation.',
+          content: hasReferenceImages
+            ? "You translate affirmations into evocative visual art prompts for text-to-image models. When user reference photos are provided, you MUST ensure the generated image shows the EXACT same person from the reference photos. The person's facial features, skin tone, hair, and body proportions must be identical to the reference. Only the clothing, setting, and pose can vary. Focus on mood, lighting, and key elements that visually convey the message of the affirmation while maintaining the exact likeness of the reference person. Always emphasize that the person in the generated image must be photorealistic and look exactly like the person in the reference photos."
+            : 'You translate affirmations into evocative visual art prompts for text-to-image models. Focus on mood, lighting, and key elements that visually aptly convey the message of the affirmation.',
         },
         {
           role: 'user',
@@ -114,9 +203,12 @@ export async function POST(request: Request) {
     }
 
     const replicate = getReplicate();
-    const baseModel =
-      process.env.REPLICATE_NANO_BANANA_MODEL ?? 'google/nano-banana';
-    const configuredVersion = process.env.REPLICATE_NANO_BANANA_VERSION;
+
+    // Use nano-banana-pro for personal images, regular nano-banana for generic images
+    const useProModel = useUserImages && imageInputs.length > 0;
+    const baseModel = useProModel
+      ? process.env.REPLICATE_NANO_BANANA_PRO_MODEL ?? 'google/nano-banana-pro'
+      : process.env.REPLICATE_NANO_BANANA_MODEL ?? 'google/nano-banana';
 
     const resolveModelSpecifier = async (): Promise<ModelSpecifier> => {
       const ensureWithLatestVersion = async (
@@ -139,6 +231,13 @@ export async function POST(request: Request) {
         return `${owner}/${name}:${latestId}` as ModelSpecifier;
       };
 
+      // For pro model, always use latest version (no configured version needed)
+      if (useProModel) {
+        return await ensureWithLatestVersion(baseModel);
+      }
+
+      // For regular model, check for configured version
+      const configuredVersion = process.env.REPLICATE_NANO_BANANA_VERSION;
       if (!configuredVersion) {
         return await ensureWithLatestVersion(baseModel);
       }
@@ -166,17 +265,70 @@ export async function POST(request: Request) {
     const modelSpecifier = await resolveModelSpecifier();
 
     if (imageInputs.length > 0) {
-      console.log('[api/predictions] Including reference images:', imageInputs);
+      console.log('[api/predictions] Including reference images:', {
+        count: imageInputs.length,
+        urls: imageInputs,
+        useUserImages,
+        hasPortrait: !!userImages?.portrait,
+        hasFullBody: !!userImages?.fullBody,
+        useProModel,
+      });
+    } else if (useUserImages) {
+      console.warn(
+        '[api/predictions] useUserImages is true but no image inputs found:',
+        {
+          useUserImages,
+          userImages,
+          portrait: userImages?.portrait,
+          fullBody: userImages?.fullBody,
+        }
+      );
     }
 
-    const output = await replicate.run(modelSpecifier, {
-      input: {
-        prompt: imagePrompt,
-        output_format: 'jpg',
-        aspect_ratio: aspectRatio,
-        ...(imageInputs.length > 0 ? { image_input: imageInputs } : {}),
-      },
+    // Prepare input based on model type
+    const input: any = {
+      prompt: imagePrompt,
+      output_format: 'jpg',
+      aspect_ratio: aspectRatio,
+    };
+
+    // For nano-banana-pro, use different input structure
+    if (useProModel && imageInputs.length > 0) {
+      input.image_input = imageInputs;
+      // Set resolution for pro model (1K, 2K, or 4K) - default to 2K for balance of quality and cost
+      input.resolution =
+        process.env.REPLICATE_NANO_BANANA_PRO_RESOLUTION ?? '2K';
+      console.log(
+        '[api/predictions] Using nano-banana-pro with reference images:',
+        {
+          model: modelSpecifier,
+          imageInputCount: imageInputs.length,
+          resolution: input.resolution,
+          aspectRatio: input.aspect_ratio,
+        }
+      );
+    } else if (imageInputs.length > 0) {
+      // Regular nano-banana also supports image_input
+      input.image_input = imageInputs;
+      console.log(
+        '[api/predictions] Using nano-banana with reference images:',
+        {
+          model: modelSpecifier,
+          imageInputCount: imageInputs.length,
+        }
+      );
+    }
+
+    console.log('[api/predictions] Final Replicate input:', {
+      prompt: imagePrompt.substring(0, 100) + '...',
+      hasImageInput: !!input.image_input,
+      imageInputCount: input.image_input?.length || 0,
+      aspectRatio: input.aspect_ratio,
+      resolution: input.resolution,
+      model: modelSpecifier,
     });
+
+    const output = await replicate.run(modelSpecifier, { input });
 
     const imageUrl =
       typeof output === 'string'

@@ -114,9 +114,34 @@ export function AffirmationModal({
   }, [user]);
 
   const hasPersonalImages = useMemo(
-    () => Boolean(profile?.portraitImageUrl && profile?.fullBodyImageUrl),
+    () => Boolean(profile?.portraitImageUrl || profile?.fullBodyImageUrl),
     [profile?.portraitImageUrl, profile?.fullBodyImageUrl]
   );
+
+  // Debug: Log profile image URLs when they change
+  useEffect(() => {
+    console.log('[AffirmationModal] Profile image URLs:', {
+      hasProfile: !!profile,
+      portraitImageUrl: profile?.portraitImageUrl,
+      fullBodyImageUrl: profile?.fullBodyImageUrl,
+      hasPersonalImages,
+    });
+  }, [
+    profile?.portraitImageUrl,
+    profile?.fullBodyImageUrl,
+    hasPersonalImages,
+    profile,
+  ]);
+
+  // Refresh profile when modal opens to ensure we have latest image URLs
+  useEffect(() => {
+    if (open && user && refreshProfile) {
+      console.log('[AffirmationModal] Refreshing profile on modal open...');
+      refreshProfile().catch((error) => {
+        console.error('[AffirmationModal] Failed to refresh profile:', error);
+      });
+    }
+  }, [open, user, refreshProfile]);
 
   const hasPersonalVoice = useMemo(
     () => Boolean(profile?.voiceCloneId),
@@ -278,17 +303,17 @@ export function AffirmationModal({
             );
             // Auto-generate will use personal images if available
             // Set useMyImage to true if personal images are available
-            if (
-              hasPersonalImages &&
-              !personalImageManuallyDisabledRef.current
-            ) {
+            const shouldUsePersonalImages =
+              hasPersonalImages && !personalImageManuallyDisabledRef.current;
+            if (shouldUsePersonalImages) {
               setUseMyImage(true);
             }
-            // Pass affirmation text directly to avoid state timing issues
+            // Pass affirmation text and useMyImage flag directly to avoid state timing issues
             generateImage({
               docId: docRef.id,
               silent: true,
               affirmationText: data.affirmation,
+              forceUsePersonalImages: shouldUsePersonalImages,
             }).catch((error) => {
               console.error(
                 '[AffirmationModal] Auto image generation error:',
@@ -377,6 +402,7 @@ export function AffirmationModal({
     docId?: string;
     silent?: boolean;
     affirmationText?: string;
+    forceUsePersonalImages?: boolean;
   }) => {
     const affirmationToUse = options?.affirmationText ?? affirmation;
     if (!options?.silent) {
@@ -435,29 +461,54 @@ export function AffirmationModal({
 
     try {
       const targetDocId = options?.docId ?? affirmationDocId;
+
+      // Determine if we should use personal images
+      // Use the forced value if provided (for auto-generate), otherwise use state
+      const shouldUsePersonalImages =
+        options?.forceUsePersonalImages !== undefined
+          ? options.forceUsePersonalImages
+          : useMyImage && hasPersonalImages;
+
+      const requestBody = {
+        affirmation: affirmationToUse,
+        category: category.title,
+        categoryId: category.id,
+        useUserImages: shouldUsePersonalImages,
+        userImages: shouldUsePersonalImages
+          ? {
+              portrait: profile?.portraitImageUrl,
+              fullBody: profile?.fullBodyImageUrl,
+            }
+          : undefined,
+        aspectRatio: profile?.defaultAspectRatio ?? '1:1',
+        demographics: !shouldUsePersonalImages
+          ? profile?.tier === 'starter'
+            ? undefined
+            : demographicContext
+          : // Even when using personal images, include demographics for other characters in the scene
+            demographicContext,
+      };
+
+      // Log what we're sending (for debugging)
+      console.log('[AffirmationModal] Generating image with:', {
+        useUserImages: requestBody.useUserImages,
+        shouldUsePersonalImages,
+        useMyImage,
+        hasPersonalImages,
+        hasPortrait: !!requestBody.userImages?.portrait,
+        hasFullBody: !!requestBody.userImages?.fullBody,
+        portraitUrl: requestBody.userImages?.portrait ? 'present' : 'missing',
+        fullBodyUrl: requestBody.userImages?.fullBody ? 'present' : 'missing',
+        portraitImageUrl: profile?.portraitImageUrl,
+        fullBodyImageUrl: profile?.fullBodyImageUrl,
+        category: requestBody.category,
+        aspectRatio: requestBody.aspectRatio,
+      });
+
       const response = await fetch('/api/predictions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          affirmation: affirmationToUse,
-          category: category.title,
-          categoryId: category.id,
-          useUserImages: useMyImage && hasPersonalImages,
-          userImages:
-            useMyImage && hasPersonalImages
-              ? {
-                  portrait: profile?.portraitImageUrl,
-                  fullBody: profile?.fullBodyImageUrl,
-                }
-              : undefined,
-          aspectRatio: profile?.defaultAspectRatio ?? '1:1',
-          demographics:
-            !useMyImage || !hasPersonalImages
-              ? profile?.tier === 'starter'
-                ? undefined
-                : demographicContext
-              : undefined,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
@@ -791,6 +842,29 @@ export function AffirmationModal({
       setUseMyVoice(false);
     }
   }, [useMyVoice, hasPersonalVoice]);
+
+  // Set useMyVoice default based on account settings
+  useEffect(() => {
+    if (
+      open &&
+      profile?.useMyVoiceByDefault &&
+      hasPersonalVoice &&
+      profile?.voiceCloneId
+    ) {
+      setUseMyVoice(true);
+    } else if (!profile?.useMyVoiceByDefault) {
+      // Only reset if the default is explicitly false
+      // Don't reset if it's undefined (to preserve user's manual toggle)
+      if (profile?.useMyVoiceByDefault === false) {
+        setUseMyVoice(false);
+      }
+    }
+  }, [
+    open,
+    profile?.useMyVoiceByDefault,
+    hasPersonalVoice,
+    profile?.voiceCloneId,
+  ]);
 
   useEffect(() => {
     if (!affirmationDocId || !user) {

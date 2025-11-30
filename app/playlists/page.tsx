@@ -1,7 +1,17 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Play, Trash2, MoreVertical, ArrowLeft } from 'lucide-react';
+import {
+  Plus,
+  Play,
+  Trash2,
+  MoreVertical,
+  ArrowLeft,
+  Download,
+  Music,
+  Image,
+} from 'lucide-react';
 import { doc, deleteDoc } from 'firebase/firestore';
 
 import {
@@ -23,12 +33,200 @@ import { useAuth } from '@/providers/auth-provider';
 import { usePlaylists } from '@/hooks/use-playlists';
 import { firebaseDb } from '@/lib/firebase/client';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { useUserAffirmations } from '@/hooks/use-user-affirmations';
 
 export default function PlaylistsPage() {
-  const { user, authLoading } = useAuth();
+  const { user, authLoading, profile } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
   const { playlists, loading } = usePlaylists();
+  const { affirmations } = useUserAffirmations();
+  const [downloadingPlaylistId, setDownloadingPlaylistId] = useState<
+    string | null
+  >(null);
+  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
+  const [downloadPlaylistId, setDownloadPlaylistId] = useState<string | null>(
+    null
+  );
+  const [selectedVoiceForDownload, setSelectedVoiceForDownload] =
+    useState<string>('');
+  const [loadingVoices, setLoadingVoices] = useState(false);
+  const [voices, setVoices] = useState<
+    Array<{ id: string; name: string; description?: string }>
+  >([]);
+
+  // Load voices for download
+  useEffect(() => {
+    const fetchVoices = async () => {
+      setLoadingVoices(true);
+      try {
+        const response = await fetch('/api/voices');
+        if (!response.ok) throw new Error('Unable to load voices');
+        const data = await response.json();
+        const options =
+          data.voices?.map((voice: any) => ({
+            id: voice.voice_id ?? voice.id,
+            name: voice.name,
+            description: voice.description ?? voice.labels?.description ?? '',
+          })) ?? [];
+
+        // Add cloned voice option if available
+        if (profile?.voiceCloneId) {
+          options.unshift({
+            id: profile.voiceCloneId,
+            name: profile.voiceCloneName ?? 'Your Voice',
+            description: 'Your personal cloned voice',
+          });
+        }
+
+        setVoices(options);
+        // Set default voice
+        if (options.length > 0 && !selectedVoiceForDownload) {
+          if (profile?.voiceCloneId) {
+            setSelectedVoiceForDownload(profile.voiceCloneId);
+          } else {
+            setSelectedVoiceForDownload(options[0].id);
+          }
+        }
+      } catch (error) {
+        console.error('[playlists] Failed to load voices', error);
+      } finally {
+        setLoadingVoices(false);
+      }
+    };
+
+    if (user) {
+      void fetchVoices();
+    }
+  }, [
+    user,
+    profile?.voiceCloneId,
+    profile?.voiceCloneName,
+    selectedVoiceForDownload,
+  ]);
+
+  // Check if all affirmations in a playlist have cached audio for a voice
+  const checkPlaylistAudioReady = (
+    playlistId: string,
+    voiceId: string
+  ): boolean => {
+    const playlist = playlists.find((p) => p.id === playlistId);
+    if (!playlist) return false;
+
+    const playlistAffirmations = affirmations.filter((aff) =>
+      playlist.affirmationIds.includes(aff.id)
+    );
+
+    if (playlistAffirmations.length === 0) return false;
+
+    // Check if all affirmations have cached audio for this voice
+    return playlistAffirmations.every((aff) => {
+      const audioUrls = aff.audioUrls || {};
+      return !!audioUrls[voiceId];
+    });
+  };
+
+  const handleDownloadClick = (playlistId: string) => {
+    if (!selectedVoiceForDownload) {
+      toast({
+        title: 'Select a voice',
+        description: 'Please select a voice before downloading.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const isReady = checkPlaylistAudioReady(
+      playlistId,
+      selectedVoiceForDownload
+    );
+    if (!isReady) {
+      setDownloadPlaylistId(playlistId);
+      setDownloadDialogOpen(true);
+      return;
+    }
+
+    void handleDownload(playlistId, selectedVoiceForDownload);
+  };
+
+  const handleDownload = async (playlistId: string, voiceId: string) => {
+    if (!user) return;
+
+    setDownloadingPlaylistId(playlistId);
+
+    // Show loading toast
+    const loadingToast = toast({
+      title: 'Preparing download...',
+      description: 'Combining audio files. This may take a moment.',
+    });
+
+    try {
+      const response = await fetch('/api/playlist/download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.uid,
+          playlistId,
+          voiceId,
+          withMusic: false,
+          withImages: false,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        if (data.error === 'Not all affirmations have cached audio') {
+          setDownloadPlaylistId(playlistId);
+          setDownloadDialogOpen(true);
+          return;
+        }
+        throw new Error(data.error || 'Failed to download playlist');
+      }
+
+      // Get the playlist name for the filename
+      const playlist = playlists.find((p) => p.id === playlistId);
+      const playlistName = playlist?.name || 'playlist';
+      const fileName = `${playlistName.replace(
+        /[^a-z0-9]/gi,
+        '_'
+      )}_${voiceId}.mp3`;
+
+      // Create blob from response
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: 'Download complete',
+        description: 'Your playlist audio has been downloaded.',
+      });
+    } catch (error) {
+      console.error('[playlists] Download failed', error);
+      toast({
+        title: 'Download failed',
+        description:
+          error instanceof Error
+            ? error.message
+            : 'Unable to download the playlist. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setDownloadingPlaylistId(null);
+    }
+  };
 
   const handleDelete = async (playlistId: string, playlistName: string) => {
     if (!user) return;
@@ -88,9 +286,7 @@ export default function PlaylistsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Playlists</CardTitle>
-            <CardDescription>
-              Sign in to view and manage your affirmation playlists.
-            </CardDescription>
+            <CardDescription>Loading...</CardDescription>
           </CardHeader>
         </Card>
       </main>
@@ -181,6 +377,27 @@ export default function PlaylistsPage() {
                     >
                       <Play className='mr-2 h-4 w-4' />
                       View & Play
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/playlists/${playlist.id}/edit`);
+                      }}
+                    >
+                      <Plus className='mr-2 h-4 w-4' />
+                      Edit Playlist
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDownloadClick(playlist.id);
+                      }}
+                      disabled={downloadingPlaylistId === playlist.id}
+                    >
+                      <Download className='mr-2 h-4 w-4' />
+                      {downloadingPlaylistId === playlist.id
+                        ? 'Downloading...'
+                        : 'Download playlist'}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={(e) => {

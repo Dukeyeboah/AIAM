@@ -5,6 +5,12 @@ settings:
   excludeLinksFromLockfile: false
 
 dependencies:
+  '@ffmpeg/ffmpeg':
+    specifier: ^0.12.15
+    version: 0.12.15
+  '@ffmpeg/util':
+    specifier: ^0.12.2
+    version: 0.12.2
   '@hookform/resolvers':
     specifier: ^3.10.0
     version: 3.10.0(react-hook-form@7.60.0)
@@ -97,7 +103,7 @@ dependencies:
     version: 1.5.0(next@16.0.0)(react@19.2.0)
   ai:
     specifier: latest
-    version: 5.0.101(zod@3.25.76)
+    version: 5.0.104(zod@3.25.76)
   autoprefixer:
     specifier: ^10.4.20
     version: 10.4.20(postcss@8.5.0)
@@ -208,20 +214,20 @@ devDependencies:
 
 packages:
 
-  /@ai-sdk/gateway@2.0.15(zod@3.25.76):
-    resolution: {integrity: sha512-i1YVKzC1dg9LGvt+GthhD7NlRhz9J4+ZRj3KELU14IZ/MHPsOBiFeEoCCIDLR+3tqT8/+5nIsK3eZ7DFRfMfdw==}
+  /@ai-sdk/gateway@2.0.17(zod@3.25.76):
+    resolution: {integrity: sha512-oVAG6q72KsjKlrYdLhWjRO7rcqAR8CjokAbYuyVZoCO4Uh2PH/VzZoxZav71w2ipwlXhHCNaInGYWNs889MMDA==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
     dependencies:
       '@ai-sdk/provider': 2.0.0
-      '@ai-sdk/provider-utils': 3.0.17(zod@3.25.76)
+      '@ai-sdk/provider-utils': 3.0.18(zod@3.25.76)
       '@vercel/oidc': 3.0.5
       zod: 3.25.76
     dev: false
 
-  /@ai-sdk/provider-utils@3.0.17(zod@3.25.76):
-    resolution: {integrity: sha512-TR3Gs4I3Tym4Ll+EPdzRdvo/rc8Js6c4nVhFLuvGLX/Y4V9ZcQMa/HTiYsHEgmYrf1zVi6Q145UEZUfleOwOjw==}
+  /@ai-sdk/provider-utils@3.0.18(zod@3.25.76):
+    resolution: {integrity: sha512-ypv1xXMsgGcNKUP+hglKqtdDuMg68nWHucPPAhIENrbFAI+xCHiqPVN8Zllxyv1TNZwGWUghPxJXU+Mqps0YRQ==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -271,6 +277,23 @@ packages:
 
   /@fastify/busboy@3.2.0:
     resolution: {integrity: sha512-m9FVDXU3GT2ITSe0UaMA5rU3QkfC/UXtCU8y0gSN/GugTqtVldOBWIB5V6V3sbmenVZUIpU6f+mPEO2+m5iTaA==}
+    dev: false
+
+  /@ffmpeg/ffmpeg@0.12.15:
+    resolution: {integrity: sha512-1C8Obr4GsN3xw+/1Ww6PFM84wSQAGsdoTuTWPOj2OizsRDLT4CXTaVjPhkw6ARyDus1B9X/L2LiXHqYYsGnRFw==}
+    engines: {node: '>=18.x'}
+    dependencies:
+      '@ffmpeg/types': 0.12.4
+    dev: false
+
+  /@ffmpeg/types@0.12.4:
+    resolution: {integrity: sha512-k9vJQNBGTxE5AhYDtOYR5rO5fKsspbg51gbcwtbkw2lCdoIILzklulcjJfIDwrtn7XhDeF2M+THwJ2FGrLeV6A==}
+    engines: {node: '>=16.x'}
+    dev: false
+
+  /@ffmpeg/util@0.12.2:
+    resolution: {integrity: sha512-ouyoW+4JB7WxjeZ2y6KpRvB+dLp7Cp4ro8z0HIVpZVCM7AwFlHa0c4R8Y/a4M3wMqATpYKhC7lSFHQ0T11MEDw==}
+    engines: {node: '>=18.x'}
     dev: false
 
   /@firebase/analytics-compat@0.2.17(@firebase/app-compat@0.2.49)(@firebase/app@0.11.0):
@@ -862,7 +885,7 @@ packages:
     engines: {node: ^8.13.0 || >=10.10.0}
     dependencies:
       '@grpc/proto-loader': 0.7.15
-      '@types/node': 22.0.0
+      '@types/node': 22.19.1
     dev: false
 
   /@grpc/proto-loader@0.7.15:
@@ -2811,7 +2834,7 @@ packages:
   /@types/node-fetch@2.6.13:
     resolution: {integrity: sha512-QGpRVpzSaUs30JBSGPjOg4Uveu384erbHBoT1zeONvyCfwQxIkUshLAOqN/k9EjGviPRmWTTe6aH2qySWKTVSw==}
     dependencies:
-      '@types/node': 22.0.0
+      '@types/node': 22.19.1
       form-data: 4.0.4
     dev: false
 
@@ -2950,15 +2973,15 @@ packages:
       humanize-ms: 1.2.1
     dev: false
 
-  /ai@5.0.101(zod@3.25.76):
-    resolution: {integrity: sha512-/P4fgs2PGYTBaZi192YkPikOudsl9vccA65F7J7LvoNTOoP5kh1yAsJPsKAy6FXU32bAngai7ft1UDyC3u7z5g==}
+  /ai@5.0.104(zod@3.25.76):
+    resolution: {integrity: sha512-MZOkL9++nY5PfkpWKBR3Rv+Oygxpb9S16ctv8h91GvrSif7UnNEdPMVZe3bUyMd2djxf0AtBk/csBixP0WwWZQ==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
     dependencies:
-      '@ai-sdk/gateway': 2.0.15(zod@3.25.76)
+      '@ai-sdk/gateway': 2.0.17(zod@3.25.76)
       '@ai-sdk/provider': 2.0.0
-      '@ai-sdk/provider-utils': 3.0.17(zod@3.25.76)
+      '@ai-sdk/provider-utils': 3.0.18(zod@3.25.76)
       '@opentelemetry/api': 1.9.0
       zod: 3.25.76
     dev: false
@@ -4269,7 +4292,7 @@ packages:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.0
-      '@types/node': 22.0.0
+      '@types/node': 22.19.1
       long: 5.3.2
     dev: false
 

@@ -149,6 +149,16 @@ const ensureUserProfile = async (firebaseUser: User): Promise<UserProfile> => {
   }
 
   const data = snapshot.data() as DocumentData;
+
+  // Debug: Log what we're reading from Firestore
+  console.log('[auth] Loading profile from Firestore:', {
+    uid: firebaseUser.uid,
+    portraitImageUrl: data.portraitImageUrl,
+    fullBodyImageUrl: data.fullBodyImageUrl,
+    hasPortrait: !!data.portraitImageUrl,
+    hasFullBody: !!data.fullBodyImageUrl,
+  });
+
   const mergedProfile: UserProfile = {
     ...baseProfile,
     displayName:
@@ -176,6 +186,15 @@ const ensureUserProfile = async (firebaseUser: User): Promise<UserProfile> => {
     credits: typeof data.credits === 'number' ? data.credits : DEFAULT_CREDITS,
     savedCount: typeof data.savedCount === 'number' ? data.savedCount : 0,
   };
+
+  // Debug: Log what we're returning
+  console.log('[auth] Merged profile:', {
+    uid: mergedProfile.uid,
+    portraitImageUrl: mergedProfile.portraitImageUrl,
+    fullBodyImageUrl: mergedProfile.fullBodyImageUrl,
+    hasPortrait: !!mergedProfile.portraitImageUrl,
+    hasFullBody: !!mergedProfile.fullBodyImageUrl,
+  });
 
   const needsUpdate =
     mergedProfile.displayName !== data.displayName ||
@@ -242,6 +261,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(firebaseUser);
           try {
             const resolvedProfile = await ensureUserProfile(firebaseUser);
+            console.log('[auth] Initial profile loaded:', {
+              uid: resolvedProfile.uid,
+              portraitImageUrl: resolvedProfile.portraitImageUrl,
+              fullBodyImageUrl: resolvedProfile.fullBodyImageUrl,
+            });
             setProfile(resolvedProfile);
           } catch (profileError) {
             console.error('[auth] Failed to load user profile', profileError);
@@ -328,14 +352,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshProfile = useCallback(async () => {
     const current = firebaseAuth.currentUser;
     if (!current) {
+      console.log('[auth] refreshProfile: No current user');
       return;
     }
     try {
+      console.log('[auth] refreshProfile: Starting refresh...');
       await current.reload();
       const reloaded = firebaseAuth.currentUser;
       if (reloaded) {
         setUser(reloaded);
         const resolvedProfile = await ensureUserProfile(reloaded);
+        console.log('[auth] refreshProfile: Profile refreshed:', {
+          portraitImageUrl: resolvedProfile.portraitImageUrl,
+          fullBodyImageUrl: resolvedProfile.fullBodyImageUrl,
+        });
         setProfile(resolvedProfile);
       }
     } catch (error) {

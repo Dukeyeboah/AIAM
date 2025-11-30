@@ -4,7 +4,7 @@
  */
 
 export const BASE_AFFIRMATION_COST = 20; // Affirmation + generic image
-export const PERSONAL_IMAGE_COST = 10; // Additional cost when using personal reference images
+export const PERSONAL_IMAGE_COST = 50; // Additional cost when using personal reference images (nano-banana-pro model)
 export const VOICE_CLONE_COST = 20; // Additional cost for voice clone playback
 
 export interface CreditCalculation {

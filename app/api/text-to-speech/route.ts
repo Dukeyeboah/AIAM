@@ -39,9 +39,13 @@ export async function POST(request: Request) {
         text,
         model_id: process.env.ELEVENLABS_MODEL_ID ?? DEFAULT_MODEL,
         voice_settings: {
-          stability: 0.35,
+          // Stability (0.0-1.0): Higher = more consistent, less variation
+          // For meditative: Higher stability (0.7-0.9) = more consistent, calming delivery
+          stability: 0.75,
           similarity_boost: 0.75,
-          style: 0.2,
+          // Style (0.0-1.0): Lower = more natural/conversational, Higher = more expressive/dramatic
+          // For meditative: Lower style (0.0-0.2) = more natural, calm, less dramatic
+          style: 0.15,
           use_speaker_boost: true,
         },
         output_format: 'mp3_44100_128',
