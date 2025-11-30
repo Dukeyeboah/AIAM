@@ -207,7 +207,7 @@ Generate ultra-high quality, photorealistic images that look like professional p
     // Use nano-banana-pro for personal images, regular nano-banana for generic images
     const useProModel = useUserImages && imageInputs.length > 0;
     const baseModel = useProModel
-      ? process.env.REPLICATE_NANO_BANANA_PRO_MODEL ?? 'google/nano-banana-pro'
+      ? process.env.REPLICATE_NANO_BANANA_PRO_MODEL ?? 'google/nano-banana'
       : process.env.REPLICATE_NANO_BANANA_MODEL ?? 'google/nano-banana';
 
     const resolveModelSpecifier = async (): Promise<ModelSpecifier> => {
