@@ -150,6 +150,54 @@ ADDITIONAL CHARACTERS (if any appear in the scene):
 
 Generate ultra-high quality, photorealistic images that look like professional photography. The person must be immediately recognizable as the same person from the reference photos.`
       : '';
+    // Add category-specific creative guidance so scenes feel like the user's envisioned life
+    let categoryFlavor = '';
+    if (category) {
+      const c = category.toLowerCase();
+      if (
+        c.includes('wealth') ||
+        c.includes('finance') ||
+        c.includes('money') ||
+        c.includes('abundance') ||
+        c.includes('prosper')
+      ) {
+        categoryFlavor =
+          'For this category, show the person in vivid, aspirational financial and lifestyle scenes: luxurious environments, elegant homes, modern mansions, high-end hotels, private jets, yachts, fine dining, beautiful offices, inspiring cityscapes, and surroundings that radiate prosperity, ease, and financial freedom. The mood should feel like they are already living their wealthy future life.';
+      } else if (
+        c.includes('health') ||
+        c.includes('wellbeing') ||
+        c.includes('well-being') ||
+        c.includes('wellness') ||
+        c.includes('body')
+      ) {
+        categoryFlavor =
+          'For this category, show the person in vibrant health and wellness scenes: fit, strong, and energized. Use environments like gyms, yoga studios, nature trails, beaches at sunrise, calm meditation spaces, or outdoor exercise settings. Emphasize vitality, strength, balance, and a healthy, glowing body and lifestyle.';
+      } else if (
+        c.includes('travel') ||
+        c.includes('adventure') ||
+        c.includes('explore')
+      ) {
+        categoryFlavor =
+          'For this category, place the person in beautiful travel and adventure locations: exotic beaches, luxury resorts, stunning city skylines, mountain lookouts, serene lakes, scenic roads, cozy cafes abroad, or immersive cultural settings. The scene should feel like a dream trip already being lived.';
+      } else if (
+        c.includes('career') ||
+        c.includes('employment') ||
+        c.includes('work') ||
+        c.includes('business')
+      ) {
+        categoryFlavor =
+          'For this category, place the person in successful career and business scenes: modern offices, creative studios, stages, conference rooms, or remote work settings. Show them confident and accomplished—presenting, leading, collaborating, or working with focus and ease in an environment that reflects their elevated professional life.';
+      } else if (
+        c.includes('relationship') ||
+        c.includes('love') ||
+        c.includes('family') ||
+        c.includes('friend')
+      ) {
+        categoryFlavor =
+          'For this category, show the person in warm, emotionally rich relationship scenes: quality time with loved ones, meaningful conversations, shared laughter, cozy home moments, peaceful walks, or uplifting social settings. The mood should radiate connection, safety, affection, and mutual support.';
+      }
+    }
+
     const demographicContext =
       !useUserImages && demographics
         ? (() => {
@@ -188,6 +236,7 @@ Generate ultra-high quality, photorealistic images that look like professional p
             category ? `Category: ${category}` : '',
             'Create a concise image prompt (max 70 words) describing a single scene that captures the essence of the affirmation.',
             'Specify mood, lighting, environment, and any symbolic elements that visually aptly convey the message of the affirmation.. Use descriptive adjectives. Do not mention text or typography.',
+            categoryFlavor,
             additionalContext,
             demographicContext,
           ]

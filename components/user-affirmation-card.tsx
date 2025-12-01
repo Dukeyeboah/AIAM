@@ -13,6 +13,7 @@ import {
   Check,
   MoreVertical,
   Trash2,
+  Download,
 } from 'lucide-react';
 import { doc, serverTimestamp, updateDoc, deleteDoc } from 'firebase/firestore';
 
@@ -73,11 +74,13 @@ const REPLICATE_HOST_PATTERNS = [
 interface UserAffirmationCardProps {
   affirmation: UserAffirmation;
   showFavoriteBadge?: boolean;
+  onImageClick?: (id: string) => void;
 }
 
 export function UserAffirmationCard({
   affirmation,
   showFavoriteBadge = true,
+  onImageClick,
 }: UserAffirmationCardProps) {
   const { user, profile, refreshProfile } = useAuth();
   const { toast } = useToast();
@@ -923,6 +926,58 @@ export function UserAffirmationCard({
     }
   };
 
+  const handleDownloadImage = async () => {
+    try {
+      if (!resolvedImageUrl) {
+        toast({
+          title: 'No image available',
+          description:
+            'Generate an image for this affirmation before downloading.',
+        });
+        return;
+      }
+
+      const safeCategory = affirmation.categoryTitle
+        ?.toLowerCase()
+        .replace(/[^a-z0-9]+/gi, '_');
+      const fileName = `${safeCategory || 'affirmation'}_${affirmation.id}.jpg`;
+
+      // Ask our API to fetch the image server-side (avoids CORS) and return it as a blob
+      const response = await fetch('/api/download-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: resolvedImageUrl,
+          fileName,
+        }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data?.error || 'Failed to prepare image for download.');
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('[affirmation-card] Failed to download image', error);
+      toast({
+        title: 'Download failed',
+        description:
+          error instanceof Error
+            ? error.message
+            : 'Unable to download the image. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   return (
     <>
       <Card className=' p-0 flex h-120 flex-col overflow-y-scroll overflow-x-hidden transition-shadow hover:shadow-lg'>
@@ -930,11 +985,21 @@ export function UserAffirmationCard({
           <div
             role='button'
             tabIndex={0}
-            onClick={() => setImageDialogOpen(true)}
+            onClick={() => {
+              if (onImageClick) {
+                onImageClick(affirmation.id);
+              } else {
+                setImageDialogOpen(true);
+              }
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                setImageDialogOpen(true);
+                if (onImageClick) {
+                  onImageClick(affirmation.id);
+                } else {
+                  setImageDialogOpen(true);
+                }
               }
             }}
             className='relative h-72 w-full overflow-hidden'
@@ -979,6 +1044,16 @@ export function UserAffirmationCard({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align='end'>
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDownloadImage();
+                    }}
+                    disabled={!resolvedImageUrl}
+                  >
+                    <Download className='mr-2 h-4 w-4' />
+                    Download image
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={(e) => {
                       e.stopPropagation();
@@ -1165,7 +1240,7 @@ export function UserAffirmationCard({
           </Collapsible>
         </CardContent>
       </Card>
-      {resolvedImageUrl && (
+      {resolvedImageUrl && !onImageClick && (
         <AffirmationImageDialog
           open={imageDialogOpen}
           onOpenChange={setImageDialogOpen}

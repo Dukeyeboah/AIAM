@@ -6,7 +6,7 @@ import {
   DialogTitle,
   DialogClose,
 } from '@/components/ui/dialog';
-import { X } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface AffirmationImageDialogProps {
@@ -14,6 +14,10 @@ interface AffirmationImageDialogProps {
   onOpenChange: (open: boolean) => void;
   imageUrl: string;
   affirmation: string;
+  onPrev?: () => void;
+  onNext?: () => void;
+  hasPrev?: boolean;
+  hasNext?: boolean;
 }
 
 export function AffirmationImageDialog({
@@ -21,6 +25,10 @@ export function AffirmationImageDialog({
   onOpenChange,
   imageUrl,
   affirmation,
+  onPrev,
+  onNext,
+  hasPrev,
+  hasNext,
 }: AffirmationImageDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -41,6 +49,26 @@ export function AffirmationImageDialog({
               <X className='h-4 w-4 text-black' />
             </button>
           </DialogClose>
+          {hasPrev && onPrev && (
+            <button
+              type='button'
+              className='absolute left-2 top-1/2 z-40 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/80 shadow-lg hover:bg-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2'
+              aria-label='Previous affirmation'
+              onClick={onPrev}
+            >
+              <ChevronLeft className='h-4 w-4 text-black' />
+            </button>
+          )}
+          {hasNext && onNext && (
+            <button
+              type='button'
+              className='absolute right-2 top-1/2 z-40 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/80 shadow-lg hover:bg-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2'
+              aria-label='Next affirmation'
+              onClick={onNext}
+            >
+              <ChevronRight className='h-4 w-4 text-black' />
+            </button>
+          )}
           <img
             src={imageUrl}
             alt='Affirmation visualization'

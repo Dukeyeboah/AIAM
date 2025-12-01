@@ -40,6 +40,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/providers/auth-provider';
 import { useUserAffirmations } from '@/hooks/use-user-affirmations';
 import { UserAffirmationCard } from '@/components/user-affirmation-card';
+import { AffirmationImageDialog } from '@/components/affirmation-image-dialog';
 import { firebaseDb, firebaseStorage } from '@/lib/firebase/client';
 import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
@@ -69,11 +70,35 @@ export default function DashboardPage() {
   const playAllAbortRef = useRef<AbortController | null>(null);
   const isPausedRef = useRef(false);
 
+  // Image dialog state for flipping through affirmations
+  const [imageDialogOpen, setImageDialogOpen] = useState(false);
+  const [imageDialogIndex, setImageDialogIndex] = useState<number | null>(null);
+
   const greeting = useMemo(() => {
     if (!profile?.displayName) return 'Your dashboard';
     const firstName = profile.displayName.trim().split(/\s+/)[0];
     return `${firstName}'s dashboard`;
   }, [profile?.displayName]);
+
+  const handleImageClick = (id: string) => {
+    const index = affirmations.findIndex((a) => a.id === id);
+    if (index !== -1) {
+      setImageDialogIndex(index);
+      setImageDialogOpen(true);
+    }
+  };
+
+  const handleImagePrev = () => {
+    setImageDialogIndex((prev) =>
+      prev !== null && prev > 0 ? prev - 1 : prev
+    );
+  };
+
+  const handleImageNext = () => {
+    setImageDialogIndex((prev) =>
+      prev !== null && prev < affirmations.length - 1 ? prev + 1 : prev
+    );
+  };
 
   // Load voices and set default
   useEffect(() => {
@@ -678,12 +703,36 @@ export default function DashboardPage() {
           ) : (
             <div className='grid gap-6 grid-cols-1 md:grid-cols-2'>
               {affirmations.map((item) => (
-                <UserAffirmationCard key={item.id} affirmation={item} />
+                <UserAffirmationCard
+                  key={item.id}
+                  affirmation={item}
+                  onImageClick={handleImageClick}
+                />
               ))}
             </div>
           )}
         </CardContent>
       </Card>
+
+      {imageDialogOpen &&
+        imageDialogIndex !== null &&
+        affirmations[imageDialogIndex] &&
+        affirmations[imageDialogIndex].imageUrl && (
+          <AffirmationImageDialog
+            open={imageDialogOpen}
+            onOpenChange={setImageDialogOpen}
+            imageUrl={affirmations[imageDialogIndex].imageUrl ?? ''}
+            affirmation={affirmations[imageDialogIndex].affirmation}
+            onPrev={imageDialogIndex > 0 ? handleImagePrev : undefined}
+            onNext={
+              imageDialogIndex < affirmations.length - 1
+                ? handleImageNext
+                : undefined
+            }
+            hasPrev={imageDialogIndex > 0}
+            hasNext={imageDialogIndex < affirmations.length - 1}
+          />
+        )}
     </main>
   );
 }
